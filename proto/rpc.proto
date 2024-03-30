@@ -1,0 +1,130 @@
+syntax = "proto3";
+
+import "Protocol.proto";
+
+message RpcRequestJob {
+    string runOn = 1;
+    uint64 maxDuration = 2;
+    repeated JobInput input = 3;
+    string customerPrivateKey = 4;
+    string description = 5;
+}
+
+message RpcGetJob {
+    string jobId = 1;
+}
+
+message RpcGetPendingJobs {
+    string filterByRunOn = 1;
+    string filterByCustomer = 2;
+    string filterByDescription = 3;
+    string filterById = 4;
+}
+
+message PendingJobs {
+    repeated Job jobs = 1;
+}
+
+
+
+message RpcIsJobDone {
+  bool isDone = 1;
+}
+
+message RpcAcceptJob {
+  string jobId = 1;
+}
+
+message RpcCancelJob {
+  string jobId = 1;
+  string reason = 2;
+}
+
+message RpcJobOutput{
+  string jobId = 1;
+  string output = 2;
+}
+
+message RpcJobComplete{
+  string jobId = 1;
+  string output = 2;
+  optional string info = 3;
+}
+
+message RpcJobLog {
+  string jobId = 1;
+  string log = 2;
+
+}
+
+message RpcSendSignedEventRequest {
+  string parentJob = 1;
+  string event = 2;
+}
+
+message RpcSubscribeToEventsRequest {
+  string parentJob = 1;
+  repeated string filters = 2;
+}
+
+message RpcSubscribeToEventsResponse{
+  string parentJob = 1;
+  string subscriptionId = 2;
+}
+
+message RpcGetEventsRequest {
+  string parentJob = 1;
+  string subscriptionId = 2;
+  uint32 limit = 3; // optional : 0 or unset means no limit
+}
+
+message RpcGetEventsResponse {
+  string parentJob = 1;
+  uint32 count = 2;
+  string subscriptionId = 3;
+  repeated string events = 4;
+}
+
+
+message RpcSendSignedEventResponse{
+  string parentJob = 1;
+  bool success = 2;
+}
+
+message RpcUnsubscribeToEventsRequest{
+  string parentJob = 1;
+  string subscriptionId = 2;
+}
+
+message RpcUnsubscribeToEventsResponse{
+  bool success = 1;
+}
+
+service NostrConnector {
+    // job management
+    rpc requestJob (RpcRequestJob) returns (Job);
+    rpc getJob (RpcGetJob) returns (Job);
+    rpc getPendingJobs (RpcGetPendingJobs) returns (PendingJobs);
+    rpc isJobDone (RpcGetJob) returns (RpcIsJobDone);
+    rpc acceptJob(RpcAcceptJob) returns (Job);
+    rpc cancelJob(RpcCancelJob) returns (Job);
+    rpc outputForJob(RpcJobOutput) returns (Job);
+    rpc completeJob(RpcJobComplete) returns (Job);
+    rpc logForJob(RpcJobLog) returns (Job);
+
+
+
+    // generic nostr events
+    rpc sendSignedEvent (RpcSendSignedEventRequest) returns (RpcSendSignedEventResponse);
+    rpc subscribeToEvents (RpcSubscribeToEventsRequest) returns (RpcSubscribeToEventsResponse);
+    rpc unsubscribeToEvents (RpcUnsubscribeToEventsRequest) returns (RpcUnsubscribeToEventsResponse);
+    rpc getEvents(RpcGetEventsRequest) returns (RpcGetEventsResponse);
+}
+
+
+
+
+
+
+
+

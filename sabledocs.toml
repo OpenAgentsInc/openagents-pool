@@ -1,0 +1,22 @@
+module-title = "OpenAgents Nostr gRPC"
+
+
+
+output-dir = "."
+
+enable-lunr-search = true
+
+
+# The following 3 fields configure the source control repository of the project.
+# They are used to generate deeplinks for the members of the Proto model pointing to the original source
+# code. By default these fields are not configured, and source code links are not included in the docs.
+# The repository-type field supports two possible values, "github" and "bitbucket".
+# The fields repository-url and repository-branch should be configured to point to the correct repository.
+# repository-dir should be set only if the root of your Protobuf module is in a specific directory inside your repository.
+#repository-type = "github"
+#repository-url = "https://github.com/janedoe/myawesomeproject"
+#repository-branch = "main"
+#repository-dir = "proto"
+
+member-ordering = "preserve"
+
