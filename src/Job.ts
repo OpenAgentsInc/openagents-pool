@@ -129,8 +129,9 @@ export default class Job implements _Job {
         } else {
             const e: Array<string> = Utils.getTagVars(event, ["e"])[0];
             const jobId: string = e[0];
-            if (this.id != jobId) {
-                throw new Error("Invalid id");
+            if(!this.id) this.id = jobId;
+            else if (this.id != jobId) {
+                throw new Error("Invalid id " + jobId  + " != " + this.id); 
             }
 
             const provider: string = event.pubkey;
@@ -139,7 +140,8 @@ export default class Job implements _Job {
             }
             const content: string = event.content;
             const customerPublicKey: string = Utils.getTagVars(event, ["p"])[0][0];
-            if (customerPublicKey != this.customerPublicKey) {
+            if(!this.customerPublicKey) this.customerPublicKey = customerPublicKey;
+            else if (customerPublicKey != this.customerPublicKey) {
                 throw new Error("Invalid customer");
             }
 
@@ -154,8 +156,10 @@ export default class Job implements _Job {
 
             if (event.kind == 7000) {
                 // TODO: content?
-                const [status, info] = Utils.getTagVars(event, ["status"])[0];
+                let [status, info] = Utils.getTagVars(event, ["status"])[0];
                 const state = this.state;
+
+                if(!info&&status=="log") info=content;
 
                 if (info) {
                     const log: Log = {
@@ -330,7 +334,7 @@ export default class Job implements _Job {
             content: log,
             created_at: Math.floor(t / 1000),
             tags: [
-                ["status", "log"],
+                ["status", "log", log],
                 ["e", this.id],
                 ["p", this.customerPublicKey],
                 ["expiration", "" + Math.floor(this.expiration / 1000)],
