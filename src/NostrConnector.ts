@@ -57,6 +57,7 @@ export default class NostrConnector {
         this.maxJobExecutionTime = maxJobExecutionTime;
         this.filterProvider = filterProvider;
         this.since=(Date.now() - maxEventDuration);
+        this._loop();
         this.pool.subscribeMany(
             this.relays,
             [
@@ -96,6 +97,7 @@ export default class NostrConnector {
                 },
             }
         );
+
     }
 
     async openCustomSubscription(   
@@ -211,9 +213,21 @@ export default class NostrConnector {
         this.pool.publish(this.relays, event);
     }
 
-    async evictJob(id: string) {
-        this.closeAllCustomSubscriptions(id);
-        this.jobs = this.jobs.filter((job) => job.id !== id);
+
+    async _loop(){
+        await this.evictExpired();
+        setTimeout(this._loop.bind(this), 1000);
+    }
+
+    async evictExpired(){
+        for(let i= 0;i<this.jobs.length;i++){
+            const job= this.jobs[i];
+            await this.closeAllCustomSubscriptions(job.id);
+            if(job.isExpired()){
+                this.jobs.splice(i,1);
+                i--;
+            }
+        }
     }
 
     async _resolveJobInputs(job: Job) {
