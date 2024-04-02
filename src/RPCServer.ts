@@ -126,6 +126,7 @@ class RpcNostrConnector implements INostrConnector {
             request.runOn,
             request.maxDuration,
             request.input,
+            request.param,
             request.description,
             request.customerPrivateKey
         );
@@ -225,19 +226,3 @@ export default class RPCServer {
     }
 }
 
-// const PROTO_PATH = process.env.RPC_PROTO_PATH||'./proto/rpc.proto';
-
-// const packageDefinition = GPRCProtoLoader.loadSync(
-//     PROTO_PATH,
-//     {
-//         keepCase: true,
-//         longs: Number,
-//         enums: String,
-//         defaults: true,
-//         oneofs: true
-//     });
-// const protoDescriptor = GPRC.loadPackageDefinition(packageDefinition);
-
-// console.log(protoDescriptor);
-
-// const server = new GPRC.Server();

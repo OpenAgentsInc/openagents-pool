@@ -10,7 +10,7 @@
     "build-all": "npm run build-proto && npm run build && npm run build-docs",
     "start": "node --experimental-specifier-resolution=node js/main.js",
     "debug": "npm run build-all && cd build && node --trace-warnings --experimental-specifier-resolution=node js/main.js",
-    "ui" : "bash run-grpc-ui.sh"
+    "ui": "bash run-grpc-ui.sh"
   },
   "author": "",
   "license": "",

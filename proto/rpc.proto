@@ -6,8 +6,9 @@ message RpcRequestJob {
     string runOn = 1;
     uint64 maxDuration = 2;
     repeated JobInput input = 3;
-    string customerPrivateKey = 4;
-    string description = 5;
+    repeated JobParam param = 4;
+    string customerPrivateKey = 5;
+    string description = 6;
 }
 
 message RpcGetJob {
@@ -15,10 +16,10 @@ message RpcGetJob {
 }
 
 message RpcGetPendingJobs {
-    string filterByRunOn = 1;
-    string filterByCustomer = 2;
-    string filterByDescription = 3;
-    string filterById = 4;
+    optional string filterByRunOn = 1;
+    optional string filterByCustomer = 2;
+    optional string filterByDescription = 3;
+    optional string filterById = 4;
 }
 
 message PendingJobs {

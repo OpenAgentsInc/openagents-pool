@@ -11,6 +11,19 @@ import type { PartialMessage } from "@protobuf-ts/runtime";
 import { reflectionMergePartial } from "@protobuf-ts/runtime";
 import { MessageType } from "@protobuf-ts/runtime";
 /**
+ * @generated from protobuf message JobParam
+ */
+export interface JobParam {
+    /**
+     * @generated from protobuf field: string key = 1;
+     */
+    key: string;
+    /**
+     * @generated from protobuf field: repeated string value = 2;
+     */
+    value: string[];
+}
+/**
  * @generated from protobuf message JobInput
  */
 export interface JobInput {
@@ -127,6 +140,10 @@ export interface Job {
      */
     input: JobInput[]; // primary input
     /**
+     * @generated from protobuf field: repeated JobParam param = 6;
+     */
+    param: JobParam[]; // additional parameters
+    /**
      * @generated from protobuf field: string customerPublicKey = 7;
      */
     customerPublicKey: string;
@@ -150,6 +167,10 @@ export interface Job {
      * @generated from protobuf field: JobState state = 11;
      */
     state?: JobState;
+    /**
+     * @generated from protobuf field: uint64 maxExecutionTime = 13;
+     */
+    maxExecutionTime: number; // enforced by the provider
 }
 /**
  * @generated from protobuf enum Status
@@ -192,6 +213,61 @@ export enum Status {
      */
     UNKNOWN = 99
 }
+// @generated message type with reflection information, may provide speed optimized methods
+class JobParam$Type extends MessageType<JobParam> {
+    constructor() {
+        super("JobParam", [
+            { no: 1, name: "key", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 2, name: "value", kind: "scalar", repeat: 2 /*RepeatType.UNPACKED*/, T: 9 /*ScalarType.STRING*/ }
+        ]);
+    }
+    create(value?: PartialMessage<JobParam>): JobParam {
+        const message = globalThis.Object.create((this.messagePrototype!));
+        message.key = "";
+        message.value = [];
+        if (value !== undefined)
+            reflectionMergePartial<JobParam>(this, message, value);
+        return message;
+    }
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: JobParam): JobParam {
+        let message = target ?? this.create(), end = reader.pos + length;
+        while (reader.pos < end) {
+            let [fieldNo, wireType] = reader.tag();
+            switch (fieldNo) {
+                case /* string key */ 1:
+                    message.key = reader.string();
+                    break;
+                case /* repeated string value */ 2:
+                    message.value.push(reader.string());
+                    break;
+                default:
+                    let u = options.readUnknownField;
+                    if (u === "throw")
+                        throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
+                    let d = reader.skip(wireType);
+                    if (u !== false)
+                        (u === true ? UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
+            }
+        }
+        return message;
+    }
+    internalBinaryWrite(message: JobParam, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+        /* string key = 1; */
+        if (message.key !== "")
+            writer.tag(1, WireType.LengthDelimited).string(message.key);
+        /* repeated string value = 2; */
+        for (let i = 0; i < message.value.length; i++)
+            writer.tag(2, WireType.LengthDelimited).string(message.value[i]);
+        let u = options.writeUnknownFields;
+        if (u !== false)
+            (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
+        return writer;
+    }
+}
+/**
+ * @generated MessageType for protobuf message JobParam
+ */
+export const JobParam = new JobParam$Type();
 // @generated message type with reflection information, may provide speed optimized methods
 class JobInput$Type extends MessageType<JobInput> {
     constructor() {
@@ -498,12 +574,14 @@ class Job$Type extends MessageType<Job> {
             { no: 3, name: "expiration", kind: "scalar", T: 4 /*ScalarType.UINT64*/, L: 2 /*LongType.NUMBER*/ },
             { no: 4, name: "timestamp", kind: "scalar", T: 4 /*ScalarType.UINT64*/, L: 2 /*LongType.NUMBER*/ },
             { no: 5, name: "input", kind: "message", repeat: 1 /*RepeatType.PACKED*/, T: () => JobInput },
+            { no: 6, name: "param", kind: "message", repeat: 1 /*RepeatType.PACKED*/, T: () => JobParam },
             { no: 7, name: "customerPublicKey", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
             { no: 8, name: "description", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
             { no: 9, name: "provider", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
             { no: 10, name: "relays", kind: "scalar", repeat: 2 /*RepeatType.UNPACKED*/, T: 9 /*ScalarType.STRING*/ },
             { no: 12, name: "result", kind: "message", T: () => JobResult },
-            { no: 11, name: "state", kind: "message", T: () => JobState }
+            { no: 11, name: "state", kind: "message", T: () => JobState },
+            { no: 13, name: "maxExecutionTime", kind: "scalar", T: 4 /*ScalarType.UINT64*/, L: 2 /*LongType.NUMBER*/ }
         ]);
     }
     create(value?: PartialMessage<Job>): Job {
@@ -513,10 +591,12 @@ class Job$Type extends MessageType<Job> {
         message.expiration = 0;
         message.timestamp = 0;
         message.input = [];
+        message.param = [];
         message.customerPublicKey = "";
         message.description = "";
         message.provider = "";
         message.relays = [];
+        message.maxExecutionTime = 0;
         if (value !== undefined)
             reflectionMergePartial<Job>(this, message, value);
         return message;
@@ -541,6 +621,9 @@ class Job$Type extends MessageType<Job> {
                 case /* repeated JobInput input */ 5:
                     message.input.push(JobInput.internalBinaryRead(reader, reader.uint32(), options));
                     break;
+                case /* repeated JobParam param */ 6:
+                    message.param.push(JobParam.internalBinaryRead(reader, reader.uint32(), options));
+                    break;
                 case /* string customerPublicKey */ 7:
                     message.customerPublicKey = reader.string();
                     break;
@@ -558,6 +641,9 @@ class Job$Type extends MessageType<Job> {
                     break;
                 case /* JobState state */ 11:
                     message.state = JobState.internalBinaryRead(reader, reader.uint32(), options, message.state);
+                    break;
+                case /* uint64 maxExecutionTime */ 13:
+                    message.maxExecutionTime = reader.uint64().toNumber();
                     break;
                 default:
                     let u = options.readUnknownField;
@@ -586,6 +672,9 @@ class Job$Type extends MessageType<Job> {
         /* repeated JobInput input = 5; */
         for (let i = 0; i < message.input.length; i++)
             JobInput.internalBinaryWrite(message.input[i], writer.tag(5, WireType.LengthDelimited).fork(), options).join();
+        /* repeated JobParam param = 6; */
+        for (let i = 0; i < message.param.length; i++)
+            JobParam.internalBinaryWrite(message.param[i], writer.tag(6, WireType.LengthDelimited).fork(), options).join();
         /* string customerPublicKey = 7; */
         if (message.customerPublicKey !== "")
             writer.tag(7, WireType.LengthDelimited).string(message.customerPublicKey);
@@ -604,6 +693,9 @@ class Job$Type extends MessageType<Job> {
         /* JobState state = 11; */
         if (message.state)
             JobState.internalBinaryWrite(message.state, writer.tag(11, WireType.LengthDelimited).fork(), options).join();
+        /* uint64 maxExecutionTime = 13; */
+        if (message.maxExecutionTime !== 0)
+            writer.tag(13, WireType.Varint).uint64(message.maxExecutionTime);
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);

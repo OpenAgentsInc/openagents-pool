@@ -12,6 +12,7 @@ import type { PartialMessage } from "@protobuf-ts/runtime";
 import { reflectionMergePartial } from "@protobuf-ts/runtime";
 import { MessageType } from "@protobuf-ts/runtime";
 import { Job } from "./Protocol";
+import { JobParam } from "./Protocol";
 import { JobInput } from "./Protocol";
 /**
  * @generated from protobuf message RpcRequestJob
@@ -30,11 +31,15 @@ export interface RpcRequestJob {
      */
     input: JobInput[];
     /**
-     * @generated from protobuf field: string customerPrivateKey = 4;
+     * @generated from protobuf field: repeated JobParam param = 4;
+     */
+    param: JobParam[];
+    /**
+     * @generated from protobuf field: string customerPrivateKey = 5;
      */
     customerPrivateKey: string;
     /**
-     * @generated from protobuf field: string description = 5;
+     * @generated from protobuf field: string description = 6;
      */
     description: string;
 }
@@ -52,21 +57,21 @@ export interface RpcGetJob {
  */
 export interface RpcGetPendingJobs {
     /**
-     * @generated from protobuf field: string filterByRunOn = 1;
+     * @generated from protobuf field: optional string filterByRunOn = 1;
      */
-    filterByRunOn: string;
+    filterByRunOn?: string;
     /**
-     * @generated from protobuf field: string filterByCustomer = 2;
+     * @generated from protobuf field: optional string filterByCustomer = 2;
      */
-    filterByCustomer: string;
+    filterByCustomer?: string;
     /**
-     * @generated from protobuf field: string filterByDescription = 3;
+     * @generated from protobuf field: optional string filterByDescription = 3;
      */
-    filterByDescription: string;
+    filterByDescription?: string;
     /**
-     * @generated from protobuf field: string filterById = 4;
+     * @generated from protobuf field: optional string filterById = 4;
      */
-    filterById: string;
+    filterById?: string;
 }
 /**
  * @generated from protobuf message PendingJobs
@@ -270,8 +275,9 @@ class RpcRequestJob$Type extends MessageType<RpcRequestJob> {
             { no: 1, name: "runOn", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
             { no: 2, name: "maxDuration", kind: "scalar", T: 4 /*ScalarType.UINT64*/, L: 2 /*LongType.NUMBER*/ },
             { no: 3, name: "input", kind: "message", repeat: 1 /*RepeatType.PACKED*/, T: () => JobInput },
-            { no: 4, name: "customerPrivateKey", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
-            { no: 5, name: "description", kind: "scalar", T: 9 /*ScalarType.STRING*/ }
+            { no: 4, name: "param", kind: "message", repeat: 1 /*RepeatType.PACKED*/, T: () => JobParam },
+            { no: 5, name: "customerPrivateKey", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 6, name: "description", kind: "scalar", T: 9 /*ScalarType.STRING*/ }
         ]);
     }
     create(value?: PartialMessage<RpcRequestJob>): RpcRequestJob {
@@ -279,6 +285,7 @@ class RpcRequestJob$Type extends MessageType<RpcRequestJob> {
         message.runOn = "";
         message.maxDuration = 0;
         message.input = [];
+        message.param = [];
         message.customerPrivateKey = "";
         message.description = "";
         if (value !== undefined)
@@ -299,10 +306,13 @@ class RpcRequestJob$Type extends MessageType<RpcRequestJob> {
                 case /* repeated JobInput input */ 3:
                     message.input.push(JobInput.internalBinaryRead(reader, reader.uint32(), options));
                     break;
-                case /* string customerPrivateKey */ 4:
+                case /* repeated JobParam param */ 4:
+                    message.param.push(JobParam.internalBinaryRead(reader, reader.uint32(), options));
+                    break;
+                case /* string customerPrivateKey */ 5:
                     message.customerPrivateKey = reader.string();
                     break;
-                case /* string description */ 5:
+                case /* string description */ 6:
                     message.description = reader.string();
                     break;
                 default:
@@ -326,12 +336,15 @@ class RpcRequestJob$Type extends MessageType<RpcRequestJob> {
         /* repeated JobInput input = 3; */
         for (let i = 0; i < message.input.length; i++)
             JobInput.internalBinaryWrite(message.input[i], writer.tag(3, WireType.LengthDelimited).fork(), options).join();
-        /* string customerPrivateKey = 4; */
+        /* repeated JobParam param = 4; */
+        for (let i = 0; i < message.param.length; i++)
+            JobParam.internalBinaryWrite(message.param[i], writer.tag(4, WireType.LengthDelimited).fork(), options).join();
+        /* string customerPrivateKey = 5; */
         if (message.customerPrivateKey !== "")
-            writer.tag(4, WireType.LengthDelimited).string(message.customerPrivateKey);
-        /* string description = 5; */
+            writer.tag(5, WireType.LengthDelimited).string(message.customerPrivateKey);
+        /* string description = 6; */
         if (message.description !== "")
-            writer.tag(5, WireType.LengthDelimited).string(message.description);
+            writer.tag(6, WireType.LengthDelimited).string(message.description);
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
@@ -393,18 +406,14 @@ export const RpcGetJob = new RpcGetJob$Type();
 class RpcGetPendingJobs$Type extends MessageType<RpcGetPendingJobs> {
     constructor() {
         super("RpcGetPendingJobs", [
-            { no: 1, name: "filterByRunOn", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
-            { no: 2, name: "filterByCustomer", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
-            { no: 3, name: "filterByDescription", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
-            { no: 4, name: "filterById", kind: "scalar", T: 9 /*ScalarType.STRING*/ }
+            { no: 1, name: "filterByRunOn", kind: "scalar", opt: true, T: 9 /*ScalarType.STRING*/ },
+            { no: 2, name: "filterByCustomer", kind: "scalar", opt: true, T: 9 /*ScalarType.STRING*/ },
+            { no: 3, name: "filterByDescription", kind: "scalar", opt: true, T: 9 /*ScalarType.STRING*/ },
+            { no: 4, name: "filterById", kind: "scalar", opt: true, T: 9 /*ScalarType.STRING*/ }
         ]);
     }
     create(value?: PartialMessage<RpcGetPendingJobs>): RpcGetPendingJobs {
         const message = globalThis.Object.create((this.messagePrototype!));
-        message.filterByRunOn = "";
-        message.filterByCustomer = "";
-        message.filterByDescription = "";
-        message.filterById = "";
         if (value !== undefined)
             reflectionMergePartial<RpcGetPendingJobs>(this, message, value);
         return message;
@@ -414,16 +423,16 @@ class RpcGetPendingJobs$Type extends MessageType<RpcGetPendingJobs> {
         while (reader.pos < end) {
             let [fieldNo, wireType] = reader.tag();
             switch (fieldNo) {
-                case /* string filterByRunOn */ 1:
+                case /* optional string filterByRunOn */ 1:
                     message.filterByRunOn = reader.string();
                     break;
-                case /* string filterByCustomer */ 2:
+                case /* optional string filterByCustomer */ 2:
                     message.filterByCustomer = reader.string();
                     break;
-                case /* string filterByDescription */ 3:
+                case /* optional string filterByDescription */ 3:
                     message.filterByDescription = reader.string();
                     break;
-                case /* string filterById */ 4:
+                case /* optional string filterById */ 4:
                     message.filterById = reader.string();
                     break;
                 default:
@@ -438,17 +447,17 @@ class RpcGetPendingJobs$Type extends MessageType<RpcGetPendingJobs> {
         return message;
     }
     internalBinaryWrite(message: RpcGetPendingJobs, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
-        /* string filterByRunOn = 1; */
-        if (message.filterByRunOn !== "")
+        /* optional string filterByRunOn = 1; */
+        if (message.filterByRunOn !== undefined)
             writer.tag(1, WireType.LengthDelimited).string(message.filterByRunOn);
-        /* string filterByCustomer = 2; */
-        if (message.filterByCustomer !== "")
+        /* optional string filterByCustomer = 2; */
+        if (message.filterByCustomer !== undefined)
             writer.tag(2, WireType.LengthDelimited).string(message.filterByCustomer);
-        /* string filterByDescription = 3; */
-        if (message.filterByDescription !== "")
+        /* optional string filterByDescription = 3; */
+        if (message.filterByDescription !== undefined)
             writer.tag(3, WireType.LengthDelimited).string(message.filterByDescription);
-        /* string filterById = 4; */
-        if (message.filterById !== "")
+        /* optional string filterById = 4; */
+        if (message.filterById !== undefined)
             writer.tag(4, WireType.LengthDelimited).string(message.filterById);
         let u = options.writeUnknownFields;
         if (u !== false)

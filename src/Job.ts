@@ -1,5 +1,5 @@
 import { Event } from "nostr-tools";
-import { Job as _Job, JobInput, Log, JobState, Status, JobResult } from "./proto/Protocol";
+import { Job as _Job, JobInput, Log, JobState, Status, JobResult, JobParam } from "./proto/Protocol";
 import Utils from "./Utils";
 import {
     SimplePool,
@@ -21,6 +21,7 @@ export default class Job implements _Job {
     expiration: number = 0;
     timestamp: number = 0;
     input: JobInput[] = [];
+    param: JobParam[] = [];
     customerPublicKey: string = "";
     description: string = "";
     provider: string = "";
@@ -37,14 +38,24 @@ export default class Job implements _Job {
         acceptedBy: "",
         timestamp: 0,
     };
-    expiryAfter: number ;
+    expiryAfter: number;
     maxExecutionTime: number;
-    constructor(expiryAfter: number, runOn: string, description: string, input: JobInput[], maxExecutionTime: number, relays?: string[]) {
+
+    constructor(
+        expiryAfter: number,
+        runOn: string,
+        description: string,
+        input: JobInput[] | undefined,
+        param: JobParam[] | undefined,
+        maxExecutionTime: number,
+        relays?: string[]
+    ) {
         this.timestamp = Date.now();
         this.expiryAfter = expiryAfter;
         this.expiration = this.timestamp + expiryAfter;
-        this.maxExecutionTime=maxExecutionTime;
-        if (relays){
+        this.maxExecutionTime = maxExecutionTime;
+
+        if (relays) {
             this.relays.push(...relays);
         }
         if (runOn) {
@@ -55,6 +66,9 @@ export default class Job implements _Job {
         }
         if (input) {
             this.input.push(...input);
+        }
+        if(param){
+            this.param.push(...param);
         }
     }
 
@@ -74,7 +88,8 @@ export default class Job implements _Job {
             const customerPublicKey: string = event.pubkey;
             const timestamp: number = Number(event.created_at) * 1000;
             const expiration: number = Math.max(
-                (Number(Utils.getTagVars(event, ["expiration"])[0][0] || "0") * 1000) || timestamp + this.expiryAfter,
+                Number(Utils.getTagVars(event, ["expiration"])[0][0] || "0") * 1000 ||
+                    timestamp + this.expiryAfter,
                 timestamp + this.expiryAfter
             );
 
@@ -82,6 +97,15 @@ export default class Job implements _Job {
             // const bid = Utils.getTagVars(event, ["bid"], 1)[0];
             // const t = Utils.getTagVars(event, ["t"], 1)[0];
             const description: string = Utils.getTagVars(event, ["param", "description"])[0][0];
+
+            const params: string[][] = Utils.getTagVars(event, ["param"]);
+            for(const p of params){
+                this.param.push({
+                    key:p[0],
+                    value:p.slice(1)
+                });
+            }
+
 
             const rawInputs = Utils.getTagVars(event, ["i"]);
 
@@ -99,8 +123,8 @@ export default class Job implements _Job {
 
             const inputs: JobInput[] = [];
             for (const input of [mainInput, ...secondaryInputs]) {
-                const type = input[1] || "application/json";
-                const data = type == "application/json" ? input[0] : input[0];
+                const type = input[1] || "text";
+                const data =  input[0] ;
                 const marker = input[3] || "";
                 inputs.push({
                     data,
@@ -129,9 +153,9 @@ export default class Job implements _Job {
         } else {
             const e: Array<string> = Utils.getTagVars(event, ["e"])[0];
             const jobId: string = e[0];
-            if(!this.id) this.id = jobId;
+            if (!this.id) this.id = jobId;
             else if (this.id != jobId) {
-                throw new Error("Invalid id " + jobId  + " != " + this.id); 
+                throw new Error("Invalid id " + jobId + " != " + this.id);
             }
 
             const provider: string = event.pubkey;
@@ -140,7 +164,7 @@ export default class Job implements _Job {
             }
             const content: string = event.content;
             const customerPublicKey: string = Utils.getTagVars(event, ["p"])[0][0];
-            if(!this.customerPublicKey) this.customerPublicKey = customerPublicKey;
+            if (!this.customerPublicKey) this.customerPublicKey = customerPublicKey;
             else if (customerPublicKey != this.customerPublicKey) {
                 throw new Error("Invalid customer");
             }
@@ -159,7 +183,7 @@ export default class Job implements _Job {
                 let [status, info] = Utils.getTagVars(event, ["status"])[0];
                 const state = this.state;
 
-                if(!info&&status=="log") info=content;
+                if (!info && status == "log") info = content;
 
                 if (info) {
                     const log: Log = {
@@ -210,11 +234,9 @@ export default class Job implements _Job {
         }
     }
 
-
-
-    isAvailable() {   
+    isAvailable() {
         if (this.state.status == Status.SUCCESS) return false;
-        if(this.isExpired()) return false;
+        if (this.isExpired()) return false;
         if (
             this.state.status == Status.PROCESSING &&
             this.state.acceptedAt &&
@@ -245,7 +267,7 @@ export default class Job implements _Job {
                 ["status", "processing"],
                 ["e", this.id],
                 ["p", customerPublicKey],
-                ["expiration", "" + Math.floor(this.expiration/ 1000)],
+                ["expiration", "" + Math.floor(this.expiration / 1000)],
             ],
         };
         const events: Array<VerifiedEvent> = [];
@@ -316,8 +338,7 @@ export default class Job implements _Job {
                 ["status", "success"],
                 ["e", this.id],
                 ["p", this.customerPublicKey],
-                ["expiration", "" + Math.floor(this.expiration/ 1000)]
-
+                ["expiration", "" + Math.floor(this.expiration / 1000)],
             ],
         };
         events.push(finalizeEvent(feedbackEvent, sk));
@@ -338,7 +359,6 @@ export default class Job implements _Job {
                 ["e", this.id],
                 ["p", this.customerPublicKey],
                 ["expiration", "" + Math.floor(this.expiration / 1000)],
-                
             ],
         };
         const events: Array<VerifiedEvent> = [];
@@ -355,18 +375,18 @@ export default class Job implements _Job {
 
     async resolveInputs(resolver: (ref: string, type: string) => Promise<string | undefined>): Promise<void> {
         for (const input of this.input) {
-            if(!input.data&&input.ref){
-                const data=await resolver(input.ref, input.type);
-                if(data){
-                    input.data=data;
+            if (!input.data && input.ref) {
+                const data = await resolver(input.ref, input.type);
+                if (data) {
+                    input.data = data;
                 }
             }
         }
     }
 
-    areInputsAvailable(){
+    areInputsAvailable() {
         for (const input of this.input) {
-            if(!input.data&&input.ref){
+            if (!input.data && input.ref) {
                 return false;
             }
         }

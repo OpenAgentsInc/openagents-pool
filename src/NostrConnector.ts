@@ -15,7 +15,7 @@ import Utils from './Utils';
 import Job  from "./Job";
 
 import {  hexToBytes } from '@noble/hashes/utils' ;
-import { JobInput } from "./proto/Protocol";
+import { JobInput, JobParam } from "./proto/Protocol";
 import Ws from "ws";
 useWebSocketImplementation(Ws);
 type CustomSubscription = {
@@ -39,12 +39,14 @@ export default class NostrConnector {
     since: number;
     filterProvider: ((provider: string) => boolean) | undefined;
 
+    // TODO: support other kinds
     constructor(
         secretKey: string,
         relays: Array<string>,
         filterProvider: ((provider: string) => boolean) | undefined,
         maxEventDuration: number = 1000 * 60 * 60,
-        maxJobExecutionTime: number = 1000 * 60 * 10
+        maxJobExecutionTime: number = 1000 * 60 * 10,
+        
     ) {
         this.jobs=[];
         this.customSubscriptions = new Map();
@@ -242,8 +244,7 @@ export default class NostrConnector {
                 }
                 case "job":{
                     const job = await this.getJob(res,false);
-
-                    break;
+                    return job.result.content
                 }
             }
         });
@@ -279,7 +280,7 @@ export default class NostrConnector {
     async getJob(id: string, createIfMissing: boolean = false): Promise<Job | undefined> {
         let job:Job|undefined = this.jobs.find((job) => job.id === id);
         if (!job && createIfMissing) {
-            job = new Job( this.maxEventDuration, "", "", [], this.maxJobExecutionTime);
+            job = new Job( this.maxEventDuration, "", "", [],[], this.maxJobExecutionTime);
             this.jobs.push(job);
         }
         if(job){
@@ -370,6 +371,7 @@ export default class NostrConnector {
         runOn: string,
         maxDuration: number,
         input: Array<JobInput>,
+        param: Array<JobParam>,
         description = "",
         customerPrivateKey?: string
     ): Promise<Job> {
@@ -377,7 +379,7 @@ export default class NostrConnector {
         if (customerPrivateKey) sk = hexToBytes(customerPrivateKey);
         else sk = this.sk;
 
-        const job = new Job(maxDuration, runOn, description, input, this.maxJobExecutionTime, this.relays);
+        const job = new Job(maxDuration, runOn, description, input,param,  this.maxJobExecutionTime, this.relays);
         const events: Array<VerifiedEvent> = await job.toRequest(sk);
         for (const event of events) this.sendEvent(event);
 
