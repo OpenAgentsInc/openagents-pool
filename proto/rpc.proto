@@ -91,12 +91,12 @@ message RpcSendSignedEventResponse{
   bool success = 2;
 }
 
-message RpcUnsubscribeToEventsRequest{
+message RpcUnsubscribeFromEventsRequest{
   string parentJob = 1;
   string subscriptionId = 2;
 }
 
-message RpcUnsubscribeToEventsResponse{
+message RpcUnsubscribeFromEventsResponse{
   bool success = 1;
 }
 
@@ -117,7 +117,7 @@ service NostrConnector {
     // generic nostr events
     rpc sendSignedEvent (RpcSendSignedEventRequest) returns (RpcSendSignedEventResponse);
     rpc subscribeToEvents (RpcSubscribeToEventsRequest) returns (RpcSubscribeToEventsResponse);
-    rpc unsubscribeToEvents (RpcUnsubscribeToEventsRequest) returns (RpcUnsubscribeToEventsResponse);
+    rpc unsubscribeFromEvents (RpcUnsubscribeFromEventsRequest) returns (RpcUnsubscribeFromEventsResponse);
     rpc getEvents(RpcGetEventsRequest) returns (RpcGetEventsResponse);
 }
 

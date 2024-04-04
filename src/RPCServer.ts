@@ -25,8 +25,8 @@ import {
     RpcAcceptJob,
     RpcCancelJob,
     RpcJobOutput,
-    RpcUnsubscribeToEventsRequest,
-    RpcUnsubscribeToEventsResponse,
+    RpcUnsubscribeFromEventsRequest,
+    RpcUnsubscribeFromEventsResponse,
     RpcJobComplete,
     RpcJobLog,
 } from "./proto/rpc";
@@ -169,10 +169,10 @@ class RpcNostrConnector implements INostrConnector {
         };
     }
 
-    async unsubscribeToEvents(
-        request: RpcUnsubscribeToEventsRequest,
+    async unsubscribeFromEvents(
+        request: RpcUnsubscribeFromEventsRequest,
         context: ServerCallContext
-    ): Promise<RpcUnsubscribeToEventsResponse> {
+    ): Promise<RpcUnsubscribeFromEventsResponse> {
         await this.conn.closeCustomSubscription(request.parentJob, request.subscriptionId);
         return {
             success: true,

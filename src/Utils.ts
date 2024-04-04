@@ -1,5 +1,4 @@
 import { Event } from "nostr-tools";
-import { Job, JobInput, Log, JobState, Status } from "./proto/Protocol";
 import { uuid as uuidv4 } from "uuidv4";
 
 export default class Utils {
