@@ -124,11 +124,11 @@ class RpcNostrConnector implements INostrConnector {
     requestJob(request: RpcRequestJob, context: ServerCallContext): Promise<Job> {
         return this.conn.requestJob(
             request.runOn,
-            request.maxDuration,
+            request.expiryAfter,
             request.input,
             request.param,
-            request.description,
-            request.customerPrivateKey
+            request.description
+            
         );
     }
 

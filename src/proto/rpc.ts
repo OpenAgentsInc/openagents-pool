@@ -23,9 +23,9 @@ export interface RpcRequestJob {
      */
     runOn: string;
     /**
-     * @generated from protobuf field: uint64 maxDuration = 2;
+     * @generated from protobuf field: uint64 expiryAfter = 2;
      */
-    maxDuration: number;
+    expiryAfter: number;
     /**
      * @generated from protobuf field: repeated JobInput input = 3;
      */
@@ -34,10 +34,6 @@ export interface RpcRequestJob {
      * @generated from protobuf field: repeated JobParam param = 4;
      */
     param: JobParam[];
-    /**
-     * @generated from protobuf field: string customerPrivateKey = 5;
-     */
-    customerPrivateKey: string;
     /**
      * @generated from protobuf field: string description = 6;
      */
@@ -273,20 +269,18 @@ class RpcRequestJob$Type extends MessageType<RpcRequestJob> {
     constructor() {
         super("RpcRequestJob", [
             { no: 1, name: "runOn", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
-            { no: 2, name: "maxDuration", kind: "scalar", T: 4 /*ScalarType.UINT64*/, L: 2 /*LongType.NUMBER*/ },
+            { no: 2, name: "expiryAfter", kind: "scalar", T: 4 /*ScalarType.UINT64*/, L: 2 /*LongType.NUMBER*/ },
             { no: 3, name: "input", kind: "message", repeat: 1 /*RepeatType.PACKED*/, T: () => JobInput },
             { no: 4, name: "param", kind: "message", repeat: 1 /*RepeatType.PACKED*/, T: () => JobParam },
-            { no: 5, name: "customerPrivateKey", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
             { no: 6, name: "description", kind: "scalar", T: 9 /*ScalarType.STRING*/ }
         ]);
     }
     create(value?: PartialMessage<RpcRequestJob>): RpcRequestJob {
         const message = globalThis.Object.create((this.messagePrototype!));
         message.runOn = "";
-        message.maxDuration = 0;
+        message.expiryAfter = 0;
         message.input = [];
         message.param = [];
-        message.customerPrivateKey = "";
         message.description = "";
         if (value !== undefined)
             reflectionMergePartial<RpcRequestJob>(this, message, value);
@@ -300,17 +294,14 @@ class RpcRequestJob$Type extends MessageType<RpcRequestJob> {
                 case /* string runOn */ 1:
                     message.runOn = reader.string();
                     break;
-                case /* uint64 maxDuration */ 2:
-                    message.maxDuration = reader.uint64().toNumber();
+                case /* uint64 expiryAfter */ 2:
+                    message.expiryAfter = reader.uint64().toNumber();
                     break;
                 case /* repeated JobInput input */ 3:
                     message.input.push(JobInput.internalBinaryRead(reader, reader.uint32(), options));
                     break;
                 case /* repeated JobParam param */ 4:
                     message.param.push(JobParam.internalBinaryRead(reader, reader.uint32(), options));
-                    break;
-                case /* string customerPrivateKey */ 5:
-                    message.customerPrivateKey = reader.string();
                     break;
                 case /* string description */ 6:
                     message.description = reader.string();
@@ -330,18 +321,15 @@ class RpcRequestJob$Type extends MessageType<RpcRequestJob> {
         /* string runOn = 1; */
         if (message.runOn !== "")
             writer.tag(1, WireType.LengthDelimited).string(message.runOn);
-        /* uint64 maxDuration = 2; */
-        if (message.maxDuration !== 0)
-            writer.tag(2, WireType.Varint).uint64(message.maxDuration);
+        /* uint64 expiryAfter = 2; */
+        if (message.expiryAfter !== 0)
+            writer.tag(2, WireType.Varint).uint64(message.expiryAfter);
         /* repeated JobInput input = 3; */
         for (let i = 0; i < message.input.length; i++)
             JobInput.internalBinaryWrite(message.input[i], writer.tag(3, WireType.LengthDelimited).fork(), options).join();
         /* repeated JobParam param = 4; */
         for (let i = 0; i < message.param.length; i++)
             JobParam.internalBinaryWrite(message.param[i], writer.tag(4, WireType.LengthDelimited).fork(), options).join();
-        /* string customerPrivateKey = 5; */
-        if (message.customerPrivateKey !== "")
-            writer.tag(5, WireType.LengthDelimited).string(message.customerPrivateKey);
         /* string description = 6; */
         if (message.description !== "")
             writer.tag(6, WireType.LengthDelimited).string(message.description);

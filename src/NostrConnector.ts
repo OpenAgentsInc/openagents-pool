@@ -369,20 +369,15 @@ export default class NostrConnector {
 
     async requestJob(
         runOn: string,
-        maxDuration: number,
+        expiryAfter: number,
         input: Array<JobInput>,
         param: Array<JobParam>,
-        description = "",
-        customerPrivateKey?: string
+        description = ""
     ): Promise<Job> {
-        let sk: Uint8Array;
-        if (customerPrivateKey) sk = hexToBytes(customerPrivateKey);
-        else sk = this.sk;
-
-        const job = new Job(maxDuration, runOn, description, input,param,  this.maxJobExecutionTime, this.relays);
+        let sk: Uint8Array = this.sk;
+        const job = new Job(expiryAfter, runOn, description, input,param,  this.maxJobExecutionTime, this.relays);
         const events: Array<VerifiedEvent> = await job.toRequest(sk);
         for (const event of events) this.sendEvent(event);
-
         return job;
     }
 }
