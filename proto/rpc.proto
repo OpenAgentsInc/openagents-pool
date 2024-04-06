@@ -8,6 +8,8 @@ message RpcRequestJob {
     repeated JobInput input = 3;
     repeated JobParam param = 4;
     string description = 6;
+    optional uint32 kind = 7;
+    optional string outputFormat = 8; 
 }
 
 message RpcGetJob {

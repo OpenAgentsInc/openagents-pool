@@ -127,7 +127,9 @@ class RpcNostrConnector implements INostrConnector {
             request.expiryAfter,
             request.input,
             request.param,
-            request.description
+            request.description,
+            request.kind,
+            request.outputFormat
             
         );
     }

@@ -53,6 +53,7 @@ message JobResult {
 
 message Job {
   string id = 1;
+  uint32 kind = 14;
 
   string runOn = 2;
   uint64 expiration = 3;

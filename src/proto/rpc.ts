@@ -38,6 +38,14 @@ export interface RpcRequestJob {
      * @generated from protobuf field: string description = 6;
      */
     description: string;
+    /**
+     * @generated from protobuf field: optional uint32 kind = 7;
+     */
+    kind?: number;
+    /**
+     * @generated from protobuf field: optional string outputFormat = 8;
+     */
+    outputFormat?: string;
 }
 /**
  * @generated from protobuf message RpcGetJob
@@ -272,7 +280,9 @@ class RpcRequestJob$Type extends MessageType<RpcRequestJob> {
             { no: 2, name: "expiryAfter", kind: "scalar", T: 4 /*ScalarType.UINT64*/, L: 2 /*LongType.NUMBER*/ },
             { no: 3, name: "input", kind: "message", repeat: 1 /*RepeatType.PACKED*/, T: () => JobInput },
             { no: 4, name: "param", kind: "message", repeat: 1 /*RepeatType.PACKED*/, T: () => JobParam },
-            { no: 6, name: "description", kind: "scalar", T: 9 /*ScalarType.STRING*/ }
+            { no: 6, name: "description", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 7, name: "kind", kind: "scalar", opt: true, T: 13 /*ScalarType.UINT32*/ },
+            { no: 8, name: "outputFormat", kind: "scalar", opt: true, T: 9 /*ScalarType.STRING*/ }
         ]);
     }
     create(value?: PartialMessage<RpcRequestJob>): RpcRequestJob {
@@ -306,6 +316,12 @@ class RpcRequestJob$Type extends MessageType<RpcRequestJob> {
                 case /* string description */ 6:
                     message.description = reader.string();
                     break;
+                case /* optional uint32 kind */ 7:
+                    message.kind = reader.uint32();
+                    break;
+                case /* optional string outputFormat */ 8:
+                    message.outputFormat = reader.string();
+                    break;
                 default:
                     let u = options.readUnknownField;
                     if (u === "throw")
@@ -333,6 +349,12 @@ class RpcRequestJob$Type extends MessageType<RpcRequestJob> {
         /* string description = 6; */
         if (message.description !== "")
             writer.tag(6, WireType.LengthDelimited).string(message.description);
+        /* optional uint32 kind = 7; */
+        if (message.kind !== undefined)
+            writer.tag(7, WireType.Varint).uint32(message.kind);
+        /* optional string outputFormat = 8; */
+        if (message.outputFormat !== undefined)
+            writer.tag(8, WireType.LengthDelimited).string(message.outputFormat);
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);

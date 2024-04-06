@@ -64,35 +64,30 @@ export default class NostrConnector {
             this.relays,
             [
                 {
-                    kinds: [5003, 6003, 7000],
+                    // kinds: [5003, 6003, 7000], // TODO: is it better to add the range or keep it undefined?
                     since: Math.floor(this.since / 1000),
                 },
             ],
             {
                 onevent: (event) => {
                     try {
-                        console.log("Received event",event);
-                        switch (event.kind) {
-                            case 5003: {
-                                this.getJob(event.id, true).then((job) => {
-                                    if (!job) return;
-                                    job.merge(event, this.relays,  this.filterProvider);
-                                    this.addExtraRelays(job.relays);
-                                });
-                                break;
-                            }
-                            case 6003:
-                            case 7000: {
-                                const e: string = Utils.getTagVars(event, ["e"])[0][0];
-                                if (!e) throw new Error("Event missing e tag");
-                                this.getJob(e, true).then((job) => {
-                                    if (!job) return;
-                                    job.merge(event, this.relays,  this.filterProvider);
-                                    this.addExtraRelays(job.relays);
-                                });
-                                break;
-                            }
-                        }
+                        if(event.kind >= 5000 && event.kind <= 5999){
+                            console.log("Received event", event);                        
+                            this.getJob(event.id, true).then((job) => {
+                                if (!job) return;
+                                job.merge(event, this.relays,  this.filterProvider);
+                                this.addExtraRelays(job.relays);
+                            });                            
+                        }else if(event.kind >= 6000 && event.kind <= 7000){                        
+                            console.log("Received event", event);                        
+                            const e: string = Utils.getTagVars(event, ["e"])[0][0];
+                            if (!e) throw new Error("Event missing e tag");
+                            this.getJob(e, true).then((job) => {
+                                if (!job) return;
+                                job.merge(event, this.relays,  this.filterProvider);
+                                this.addExtraRelays(job.relays);
+                            });
+                        }                        
                     } catch (e) {
                         console.error("Error processing event" + JSON.stringify(event) + "\n" + e);
                     }
@@ -372,10 +367,13 @@ export default class NostrConnector {
         expiryAfter: number,
         input: Array<JobInput>,
         param: Array<JobParam>,
-        description = ""
+        description = "",
+        kind?:number,
+        outputFormat?: string
     ): Promise<Job> {
         let sk: Uint8Array = this.sk;
-        const job = new Job(expiryAfter, runOn, description, input,param,  this.maxJobExecutionTime, this.relays);
+        if(!((kind>=5000 && kind<=5999)||(kind>=6000 && kind<=6999))) throw new Error("Invalid kind");
+        const job = new Job(expiryAfter, runOn, description, input,param,  this.maxJobExecutionTime, this.relays, kind, outputFormat);
         const events: Array<VerifiedEvent> = await job.toRequest(sk);
         for (const event of events) this.sendEvent(event);
         return job;

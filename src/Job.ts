@@ -13,10 +13,11 @@ import {
 
 /**
  * A convenient abstraction over job events and handling
- * 
+ *
  */
 export default class Job implements _Job {
     id: string = "";
+    kind: number = 5003;
     runOn: string = "";
     expiration: number = 0;
     timestamp: number = 0;
@@ -40,6 +41,7 @@ export default class Job implements _Job {
     };
     expiryAfter: number;
     maxExecutionTime: number;
+    outputFormat: string = "application/json";
 
     constructor(
         expiryAfter: number,
@@ -48,12 +50,22 @@ export default class Job implements _Job {
         input: JobInput[] | undefined,
         param: JobParam[] | undefined,
         maxExecutionTime: number,
-        relays?: string[]
+        relays?: string[],
+        kind?: number,
+        outputFormat?: string
     ) {
         this.timestamp = Date.now();
         this.expiryAfter = expiryAfter;
         this.expiration = this.timestamp + expiryAfter;
         this.maxExecutionTime = maxExecutionTime;
+        
+        if(outputFormat){
+            this.outputFormat = outputFormat;
+        }
+
+        if (kind) {
+            this.kind = kind;
+        }
 
         if (relays) {
             this.relays.push(...relays);
@@ -67,7 +79,7 @@ export default class Job implements _Job {
         if (input) {
             this.input.push(...input);
         }
-        if(param){
+        if (param) {
             this.param.push(...param);
         }
     }
@@ -77,14 +89,14 @@ export default class Job implements _Job {
         defaultRelays: Array<string>,
         filterProvider: ((provider: string) => boolean) | undefined
     ) {
-        if (event.kind == 5003) {
+        if (event.kind >= 5000 && event.kind <= 5999) {
             // request
             const id = event.id;
             const provider: string = Utils.getTagVars(event, ["p"])[0][0];
             if (filterProvider && !filterProvider(provider)) {
                 return;
             }
-            const runOn: string = Utils.getTagVars(event, ["param", "run-on"])[0][0];
+            const runOn: string = Utils.getTagVars(event, ["param", "run-on"])[0][0] || "generic";
             const customerPublicKey: string = event.pubkey;
             const timestamp: number = Number(event.created_at) * 1000;
             const expiration: number = Math.max(
@@ -96,16 +108,15 @@ export default class Job implements _Job {
             const relays: Array<string> = Utils.getTagVars(event, ["relays"])[0] || defaultRelays;
             // const bid = Utils.getTagVars(event, ["bid"], 1)[0];
             // const t = Utils.getTagVars(event, ["t"], 1)[0];
-            const description: string = Utils.getTagVars(event, ["param", "description"])[0][0];
+            const description: string = Utils.getTagVars(event, ["param", "description"])[0][0] || "";
 
             const params: string[][] = Utils.getTagVars(event, ["param"]);
-            for(const p of params){
+            for (const p of params) {
                 this.param.push({
-                    key:p[0],
-                    value:p.slice(1)
+                    key: p[0],
+                    value: p.slice(1),
                 });
             }
-
 
             const rawInputs = Utils.getTagVars(event, ["i"]);
 
@@ -123,8 +134,8 @@ export default class Job implements _Job {
 
             const inputs: JobInput[] = [];
             for (const input of [mainInput, ...secondaryInputs]) {
-                const type = input[1] || "text";
-                const data =  input[0] ;
+                const type = input[1] || "text"; // text/plain?
+                const data = input[0];
                 const marker = input[3] || "";
                 inputs.push({
                     data,
@@ -150,9 +161,10 @@ export default class Job implements _Job {
                     this.relays.push(r);
                 }
             }
-        } else {
+        } else if (event.kind == 7000 || (event.kind >= 6000 && event.kind <= 6999)) {
             const e: Array<string> = Utils.getTagVars(event, ["e"])[0];
             const jobId: string = e[0];
+            if (!jobId) throw new Error("No job id");
             if (!this.id) this.id = jobId;
             else if (this.id != jobId) {
                 throw new Error("Invalid id " + jobId + " != " + this.id);
@@ -405,7 +417,7 @@ export default class Job implements _Job {
             inputs.push(input);
         }
         const eventRequest: EventTemplate = {
-            kind: 5003,
+            kind: this.kind,
             content: "",
             created_at: Math.floor(this.timestamp / 1000),
             tags: [
@@ -416,7 +428,7 @@ export default class Job implements _Job {
                 this.relays ? ["relays", ...this.relays] : undefined,
                 ["param", "run-on", this.runOn],
                 ["param", "description", this.description],
-                ["output", "application/json"],
+                ["output",  this.outputFormat],
             ],
         };
 
