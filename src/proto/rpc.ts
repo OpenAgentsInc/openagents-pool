@@ -23,9 +23,9 @@ export interface RpcRequestJob {
      */
     runOn: string;
     /**
-     * @generated from protobuf field: uint64 expiryAfter = 2;
+     * @generated from protobuf field: uint64 expireAfter = 2;
      */
-    expiryAfter: number;
+    expireAfter: number;
     /**
      * @generated from protobuf field: repeated JobInput input = 3;
      */
@@ -277,7 +277,7 @@ class RpcRequestJob$Type extends MessageType<RpcRequestJob> {
     constructor() {
         super("RpcRequestJob", [
             { no: 1, name: "runOn", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
-            { no: 2, name: "expiryAfter", kind: "scalar", T: 4 /*ScalarType.UINT64*/, L: 2 /*LongType.NUMBER*/ },
+            { no: 2, name: "expireAfter", kind: "scalar", T: 4 /*ScalarType.UINT64*/, L: 2 /*LongType.NUMBER*/ },
             { no: 3, name: "input", kind: "message", repeat: 1 /*RepeatType.PACKED*/, T: () => JobInput },
             { no: 4, name: "param", kind: "message", repeat: 1 /*RepeatType.PACKED*/, T: () => JobParam },
             { no: 6, name: "description", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
@@ -288,7 +288,7 @@ class RpcRequestJob$Type extends MessageType<RpcRequestJob> {
     create(value?: PartialMessage<RpcRequestJob>): RpcRequestJob {
         const message = globalThis.Object.create((this.messagePrototype!));
         message.runOn = "";
-        message.expiryAfter = 0;
+        message.expireAfter = 0;
         message.input = [];
         message.param = [];
         message.description = "";
@@ -304,8 +304,8 @@ class RpcRequestJob$Type extends MessageType<RpcRequestJob> {
                 case /* string runOn */ 1:
                     message.runOn = reader.string();
                     break;
-                case /* uint64 expiryAfter */ 2:
-                    message.expiryAfter = reader.uint64().toNumber();
+                case /* uint64 expireAfter */ 2:
+                    message.expireAfter = reader.uint64().toNumber();
                     break;
                 case /* repeated JobInput input */ 3:
                     message.input.push(JobInput.internalBinaryRead(reader, reader.uint32(), options));
@@ -337,9 +337,9 @@ class RpcRequestJob$Type extends MessageType<RpcRequestJob> {
         /* string runOn = 1; */
         if (message.runOn !== "")
             writer.tag(1, WireType.LengthDelimited).string(message.runOn);
-        /* uint64 expiryAfter = 2; */
-        if (message.expiryAfter !== 0)
-            writer.tag(2, WireType.Varint).uint64(message.expiryAfter);
+        /* uint64 expireAfter = 2; */
+        if (message.expireAfter !== 0)
+            writer.tag(2, WireType.Varint).uint64(message.expireAfter);
         /* repeated JobInput input = 3; */
         for (let i = 0; i < message.input.length; i++)
             JobInput.internalBinaryWrite(message.input[i], writer.tag(3, WireType.LengthDelimited).fork(), options).join();

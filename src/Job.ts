@@ -39,12 +39,12 @@ export default class Job implements _Job {
         acceptedBy: "",
         timestamp: 0,
     };
-    expiryAfter: number;
+    expireAfter: number;
     maxExecutionTime: number;
     outputFormat: string = "application/json";
 
     constructor(
-        expiryAfter: number,
+        expireAfter: number,
         runOn: string,
         description: string,
         input: JobInput[] | undefined,
@@ -55,11 +55,11 @@ export default class Job implements _Job {
         outputFormat?: string
     ) {
         this.timestamp = Date.now();
-        this.expiryAfter = expiryAfter;
-        this.expiration = this.timestamp + expiryAfter;
+        this.expireAfter = expireAfter;
+        this.expiration = this.timestamp + expireAfter;
         this.maxExecutionTime = maxExecutionTime;
-        
-        if(outputFormat){
+
+        if (outputFormat) {
             this.outputFormat = outputFormat;
         }
 
@@ -101,8 +101,8 @@ export default class Job implements _Job {
             const timestamp: number = Number(event.created_at) * 1000;
             const expiration: number = Math.max(
                 Number(Utils.getTagVars(event, ["expiration"])[0][0] || "0") * 1000 ||
-                    timestamp + this.expiryAfter,
-                timestamp + this.expiryAfter
+                    timestamp + this.expireAfter,
+                timestamp + this.expireAfter
             );
 
             const relays: Array<string> = Utils.getTagVars(event, ["relays"])[0] || defaultRelays;
@@ -416,19 +416,26 @@ export default class Job implements _Job {
             input.push(iinput.marker);
             inputs.push(input);
         }
+        const params: string[][] = [];
+        for (const p of this.param) {
+            const param: string[] = ["param", p.key];
+            param.push(...p.value);
+            params.push(param);
+        }
         const eventRequest: EventTemplate = {
             kind: this.kind,
             content: "",
             created_at: Math.floor(this.timestamp / 1000),
             tags: [
                 ...inputs,
+                ...params,
                 // TODO provider whitelist
                 // this.provider?[("p", this.provider)]:undefined,
                 ["expiration", "" + Math.floor(this.expiration / 1000)],
                 this.relays ? ["relays", ...this.relays] : undefined,
                 ["param", "run-on", this.runOn],
                 ["param", "description", this.description],
-                ["output",  this.outputFormat],
+                ["output", this.outputFormat],
             ],
         };
 

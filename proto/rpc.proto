@@ -4,7 +4,7 @@ import "Protocol.proto";
 
 message RpcRequestJob {
     string runOn = 1;
-    uint64 expiryAfter = 2;
+    uint64 expireAfter = 2;
     repeated JobInput input = 3;
     repeated JobParam param = 4;
     string description = 6;

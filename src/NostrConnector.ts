@@ -32,7 +32,7 @@ export default class NostrConnector {
     jobs: Array<Job>;
     sk: Uint8Array;
     pk: string;
-    customSubscriptions: Map<string,Array<CustomSubscription>>;
+    customSubscriptions: Map<string, Array<CustomSubscription>>;
 
     maxEventDuration: number;
     maxJobExecutionTime: number;
@@ -45,12 +45,11 @@ export default class NostrConnector {
         relays: Array<string>,
         filterProvider: ((provider: string) => boolean) | undefined,
         maxEventDuration: number = 1000 * 60 * 60,
-        maxJobExecutionTime: number = 1000 * 60 * 10,
-        
+        maxJobExecutionTime: number = 1000 * 60 * 10
     ) {
-        this.jobs=[];
+        this.jobs = [];
         this.customSubscriptions = new Map();
-        
+
         this.sk = hexToBytes(secretKey);
         this.pk = getPublicKey(this.sk);
         this.relays = relays;
@@ -58,7 +57,7 @@ export default class NostrConnector {
         this.maxEventDuration = maxEventDuration;
         this.maxJobExecutionTime = maxJobExecutionTime;
         this.filterProvider = filterProvider;
-        this.since=(Date.now() - maxEventDuration);
+        this.since = Date.now() - maxEventDuration;
         this._loop();
         this.pool.subscribeMany(
             this.relays,
@@ -71,36 +70,32 @@ export default class NostrConnector {
             {
                 onevent: (event) => {
                     try {
-                        if(event.kind >= 5000 && event.kind <= 5999){
-                            console.log("Received event", event);                        
+                        if (event.kind >= 5000 && event.kind <= 5999) {
+                            console.log("Received event", event);
                             this.getJob(event.id, true).then((job) => {
                                 if (!job) return;
-                                job.merge(event, this.relays,  this.filterProvider);
+                                job.merge(event, this.relays, this.filterProvider);
                                 this.addExtraRelays(job.relays);
-                            });                            
-                        }else if(event.kind >= 6000 && event.kind <= 7000){                        
-                            console.log("Received event", event);                        
+                            });
+                        } else if (event.kind >= 6000 && event.kind <= 7000) {
+                            console.log("Received event", event);
                             const e: string = Utils.getTagVars(event, ["e"])[0][0];
                             if (!e) throw new Error("Event missing e tag");
                             this.getJob(e, true).then((job) => {
                                 if (!job) return;
-                                job.merge(event, this.relays,  this.filterProvider);
+                                job.merge(event, this.relays, this.filterProvider);
                                 this.addExtraRelays(job.relays);
                             });
-                        }                        
+                        }
                     } catch (e) {
                         console.error("Error processing event" + JSON.stringify(event) + "\n" + e);
                     }
                 },
             }
         );
-
     }
 
-    async openCustomSubscription(   
-        parentJob: string,
-        filters: string[]
-    ): Promise<string>{
+    async openCustomSubscription(parentJob: string, filters: string[]): Promise<string> {
         const parsedFilters: Filter[] = filters.map((filter) => {
             return JSON.parse(filter) as Filter;
         });
@@ -117,15 +112,15 @@ export default class NostrConnector {
             );
             if (!customSub) {
                 customSub = {
-                    filters:parsedFilters,
+                    filters: parsedFilters,
                     subscriptionId: subId,
                     subCloser: sub,
                     parentJobId: parentJob,
-                    events: []
+                    events: [],
                 };
                 customSubs.push(customSub);
             }
-            if(event) customSub.events.push(event);
+            if (event) customSub.events.push(event);
         };
 
         const sub = this.pool.subscribeMany(this.relays, parsedFilters, {
@@ -140,7 +135,7 @@ export default class NostrConnector {
         return subId;
     }
 
-    async closeCustomSubscription(parentJob: string, subscriptionId: string){
+    async closeCustomSubscription(parentJob: string, subscriptionId: string) {
         let customSubs: CustomSubscription[] | undefined = this.customSubscriptions.get(parentJob);
         if (!customSubs) {
             return;
@@ -156,35 +151,39 @@ export default class NostrConnector {
         this.customSubscriptions.set(parentJob, customSubs);
     }
 
-    async closeAllCustomSubscriptions(parentJob: string){
+    async closeAllCustomSubscriptions(parentJob: string) {
         let customSubs: CustomSubscription[] | undefined = this.customSubscriptions.get(parentJob);
         if (!customSubs) {
             return;
         }
-        for(const customSub of customSubs){
+        for (const customSub of customSubs) {
             customSub.subCloser.close();
         }
         customSubs = [];
         this.customSubscriptions.set(parentJob, customSubs);
     }
 
-    async getAndConsumeCustomEvents(parentJob: string, subscriptionId: string, limit:number): Promise<string[]>{
+    async getAndConsumeCustomEvents(
+        parentJob: string,
+        subscriptionId: string,
+        limit: number
+    ): Promise<string[]> {
         let customSubs: CustomSubscription[] | undefined = this.customSubscriptions.get(parentJob);
         if (!customSubs) return [];
         const customSub: CustomSubscription | undefined = customSubs.find(
             (customSub) => customSub.subscriptionId === subscriptionId
         );
-        if (!customSub) return [];        
+        if (!customSub) return [];
         const events: Event[] = customSub.events.splice(0, limit);
         return events.map((event) => JSON.stringify(event));
     }
 
     async addExtraRelays(relays: string[]) {
         for (const relay of relays) {
-            try{
-                console.log("Ensure connection to", relay  );
+            try {
+                console.log("Ensure connection to", relay);
                 await this.pool.ensureRelay(relay);
-            }catch(e){
+            } catch (e) {
                 console.error("Error connecting to relay", relay, e);
             }
         }
@@ -194,52 +193,56 @@ export default class NostrConnector {
     }
     async sendEvent(ev: string | Event, sign: boolean = true) {
         let event: VerifiedEvent;
-        if(typeof ev === "string"){
+        if (typeof ev === "string") {
             event = JSON.parse(ev);
-        }else {
-            if((ev as Event)[verifiedSymbol]){
+        } else {
+            if ((ev as Event)[verifiedSymbol]) {
                 event = ev as VerifiedEvent;
-            }else{
-                if(!sign){
+            } else {
+                if (!sign) {
                     throw new Error("Event must be signed");
                 }
                 event = finalizeEvent(ev, this.sk);
             }
-        } 
+        }
         console.log("Publishing event\n", event, "\n To", this.relays);
         this.pool.publish(this.relays, event);
     }
 
-
-    async _loop(){
+    async _loop() {
         await this.evictExpired();
         setTimeout(this._loop.bind(this), 1000);
     }
 
-    async evictExpired(){
-        for(let i= 0;i<this.jobs.length;i++){
-            const job= this.jobs[i];
+    async evictExpired() {
+        for (let i = 0; i < this.jobs.length; i++) {
+            const job = this.jobs[i];
             await this.closeAllCustomSubscriptions(job.id);
-            if(job.isExpired()){
-                this.jobs.splice(i,1);
+            if (job.isExpired()) {
+                this.jobs.splice(i, 1);
                 i--;
             }
         }
     }
 
     async _resolveJobInputs(job: Job) {
-        await job.resolveInputs(async (res: string,type: string) => {
-            switch(type){
-                case "event":{
-                    const event:Event = (await this.pool.querySync(this.relays, {ids: [res], since: Math.floor(this.since/1000)}))[0]
-                    if(event){
+        await job.resolveInputs(async (res: string, type: string) => {
+            switch (type) {
+                case "event": {
+                    const event: Event = (
+                        await this.pool.querySync(this.relays, {
+                            ids: [res],
+                            since: Math.floor(this.since / 1000),
+                        })
+                    )[0];
+                    if (event) {
                         return JSON.stringify(event);
                     }
                     return undefined;
                 }
-                case "job":{
-                    const job = await this.getJob(res,false);
-                    return job.result.content
+                case "job": {
+                    const job = await this.getJob(res, false);
+                    return job.result.content;
                 }
             }
         });
@@ -266,21 +269,21 @@ export default class NostrConnector {
                 jobs.push(job);
             }
         }
-        for(const job of jobs){
+        for (const job of jobs) {
             await this._resolveJobInputs(job);
         }
         return jobs.filter((job) => job.areInputsAvailable());
     }
 
     async getJob(id: string, createIfMissing: boolean = false): Promise<Job | undefined> {
-        let job:Job|undefined = this.jobs.find((job) => job.id === id);
+        let job: Job | undefined = this.jobs.find((job) => job.id === id);
         if (!job && createIfMissing) {
-            job = new Job( this.maxEventDuration, "", "", [],[], this.maxJobExecutionTime);
+            job = new Job(this.maxEventDuration, "", "", [], [], this.maxJobExecutionTime);
             this.jobs.push(job);
         }
-        if(job){
+        if (job) {
             await this._resolveJobInputs(job);
-            if(!job.areInputsAvailable()){
+            if (!job.areInputsAvailable()) {
                 return undefined;
             }
         }
@@ -290,16 +293,16 @@ export default class NostrConnector {
     async acceptJob(id: string) {
         const job = await this.getJob(id);
         if (!job) {
-            throw new Error("Job not found");
+            throw new Error("Job not found " + id);
         }
-        if (job.isAvailable() ) {
+        if (job.isAvailable()) {
             job.accept(this.pk, this.sk);
         } else {
-            throw new Error("Job already assigned");
+            throw new Error("Job already assigned " + id);
         }
         await this._resolveJobInputs(job);
-        if(!job.areInputsAvailable()){
-            throw new Error("Inputs not available");
+        if (!job.areInputsAvailable()) {
+            throw new Error("Inputs not available " + id);
         }
 
         return job;
@@ -308,7 +311,7 @@ export default class NostrConnector {
     async cancelJob(id: string, reason: string) {
         const job = await this.getJob(id);
         if (!job) {
-            throw new Error("Job not found");
+            throw new Error("Job not found " + id);
         }
         if (job.isAvailable()) {
             throw new Error("Job not assigned");
@@ -316,17 +319,17 @@ export default class NostrConnector {
         const eventQueue: VerifiedEvent[] = await job.cancel(this.pk, this.sk, reason);
         for (const event of eventQueue) this.sendEvent(event);
         this.closeAllCustomSubscriptions(id);
-        
+
         return job;
     }
 
     async outputForJob(id: string, output: any) {
         const job = await this.getJob(id);
         if (!job) {
-            throw new Error("Job not found");
+            throw new Error("Job not found " + id);
         }
         if (job.isAvailable()) {
-            throw new Error("Job not assigned");
+            throw new Error("Job not assigned " + id);
         }
         const eventQueue: VerifiedEvent[] = await job.output(this.pk, this.sk, output);
         for (const event of eventQueue) this.sendEvent(event);
@@ -336,7 +339,7 @@ export default class NostrConnector {
     async completeJob(id: string, result: string) {
         const job = await this.getJob(id);
         if (!job) {
-            throw new Error("Job not found");
+            throw new Error("Job not found " + id);
         }
         if (job.isAvailable()) {
             throw new Error("Job not assigned");
@@ -350,30 +353,39 @@ export default class NostrConnector {
     async logForJob(id: string, log: string) {
         const job = await this.getJob(id);
         if (!job) {
-            throw new Error("Job not found");
+            throw new Error("Job not found " + id);
         }
         if (job.isAvailable()) {
-            throw new Error("Job not assigned");
+            throw new Error("Job not assigned " + id);
         }
         const eventQueue: VerifiedEvent[] = await job.log(this.pk, this.sk, log);
         for (const event of eventQueue) this.sendEvent(event);
         return job;
     }
 
-    
-
     async requestJob(
         runOn: string,
-        expiryAfter: number,
+        expireAfter: number,
         input: Array<JobInput>,
         param: Array<JobParam>,
         description = "",
-        kind?:number,
+        kind?: number,
         outputFormat?: string
     ): Promise<Job> {
         let sk: Uint8Array = this.sk;
-        if(!((kind>=5000 && kind<=5999)||(kind>=6000 && kind<=6999))) throw new Error("Invalid kind");
-        const job = new Job(expiryAfter, runOn, description, input,param,  this.maxJobExecutionTime, this.relays, kind, outputFormat);
+        if (kind&&!((kind >= 5000 && kind <= 5999) || (kind >= 6000 && kind <= 6999)))
+            throw new Error("Invalid kind " + kind);
+        const job = new Job(
+            expireAfter,
+            runOn,
+            description,
+            input,
+            param,
+            this.maxJobExecutionTime,
+            this.relays,
+            kind,
+            outputFormat
+        );
         const events: Array<VerifiedEvent> = await job.toRequest(sk);
         for (const event of events) this.sendEvent(event);
         return job;

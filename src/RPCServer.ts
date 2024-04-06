@@ -64,9 +64,6 @@ class RpcNostrConnector implements INostrConnector {
     async getJob(request: RpcGetJob, context: ServerCallContext): Promise<Job> {
         const id = request.jobId;
         const job = await this.conn.getJob(id);
-        if (!job) {
-            throw new RpcError("Job not found");
-        }
         return job;
     }
 
@@ -90,7 +87,7 @@ class RpcNostrConnector implements INostrConnector {
 
     async isJobDone(request: RpcGetJob, context: ServerCallContext): Promise<RpcIsJobDone> {
         const job = await this.getJob(request, context);
-        if (job.state.status == Status.SUCCESS) {
+        if (job&&job.state.status == Status.SUCCESS) {
             return {
                 isDone: true,
             };
@@ -124,13 +121,12 @@ class RpcNostrConnector implements INostrConnector {
     requestJob(request: RpcRequestJob, context: ServerCallContext): Promise<Job> {
         return this.conn.requestJob(
             request.runOn,
-            request.expiryAfter,
+            request.expireAfter,
             request.input,
             request.param,
             request.description,
             request.kind,
             request.outputFormat
-            
         );
     }
 
