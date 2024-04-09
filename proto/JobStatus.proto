@@ -1,0 +1,12 @@
+
+syntax = "proto3";
+
+enum JobStatus {
+  PENDING = 0;
+  PROCESSING = 1;
+  ERROR = 2;
+  SUCCESS = 3;
+  PARTIAL = 4;
+  PAYMENT_REQUIRED = 7;
+  UNKNOWN=99;
+}

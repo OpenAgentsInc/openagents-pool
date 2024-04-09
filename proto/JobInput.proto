@@ -1,0 +1,9 @@
+syntax = "proto3";
+
+message JobInput {
+  optional string data = 1;
+  optional string ref = 2;
+  string type = 3;
+  string marker = 4; 
+  optional string source = 5;  
+}

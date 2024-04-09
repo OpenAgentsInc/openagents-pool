@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+import "JobParam.proto";
+import "JobInput.proto";
+import "JobState.proto";
+import "JobResult.proto";
+
+
+
+message Job {
+  string id = 1;
+  uint32 kind = 14;
+
+  string runOn = 2;
+  uint64 expiration = 3;
+  uint64 timestamp = 4;
+
+  repeated JobInput input = 5; // primary input
+  repeated JobParam param = 6; // additional parameters
+  
+  string customerPublicKey = 7; 
+  string description = 8;
+  string provider = 9;
+
+  repeated string relays = 10;
+
+  JobResult result = 12;
+  JobState state = 11;
+  
+  uint64 maxExecutionTime = 13; // enforced by the provider
+  // map<string,JobResult> results = 12;
+
+  // map<string,JobState> states = 11;
+  
+
+
+ 
+}

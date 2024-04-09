@@ -11,9 +11,9 @@ import { UnknownFieldHandler } from "@protobuf-ts/runtime";
 import type { PartialMessage } from "@protobuf-ts/runtime";
 import { reflectionMergePartial } from "@protobuf-ts/runtime";
 import { MessageType } from "@protobuf-ts/runtime";
-import { Job } from "./Protocol";
-import { JobParam } from "./Protocol";
-import { JobInput } from "./Protocol";
+import { Job } from "./Job";
+import { JobParam } from "./JobParam";
+import { JobInput } from "./JobInput";
 /**
  * @generated from protobuf message RpcRequestJob
  */
@@ -76,6 +76,10 @@ export interface RpcGetPendingJobs {
      * @generated from protobuf field: optional string filterById = 4;
      */
     filterById?: string;
+    /**
+     * @generated from protobuf field: optional string filterByKind = 5;
+     */
+    filterByKind?: string;
 }
 /**
  * @generated from protobuf message PendingJobs
@@ -419,7 +423,8 @@ class RpcGetPendingJobs$Type extends MessageType<RpcGetPendingJobs> {
             { no: 1, name: "filterByRunOn", kind: "scalar", opt: true, T: 9 /*ScalarType.STRING*/ },
             { no: 2, name: "filterByCustomer", kind: "scalar", opt: true, T: 9 /*ScalarType.STRING*/ },
             { no: 3, name: "filterByDescription", kind: "scalar", opt: true, T: 9 /*ScalarType.STRING*/ },
-            { no: 4, name: "filterById", kind: "scalar", opt: true, T: 9 /*ScalarType.STRING*/ }
+            { no: 4, name: "filterById", kind: "scalar", opt: true, T: 9 /*ScalarType.STRING*/ },
+            { no: 5, name: "filterByKind", kind: "scalar", opt: true, T: 9 /*ScalarType.STRING*/ }
         ]);
     }
     create(value?: PartialMessage<RpcGetPendingJobs>): RpcGetPendingJobs {
@@ -445,6 +450,9 @@ class RpcGetPendingJobs$Type extends MessageType<RpcGetPendingJobs> {
                 case /* optional string filterById */ 4:
                     message.filterById = reader.string();
                     break;
+                case /* optional string filterByKind */ 5:
+                    message.filterByKind = reader.string();
+                    break;
                 default:
                     let u = options.readUnknownField;
                     if (u === "throw")
@@ -469,6 +477,9 @@ class RpcGetPendingJobs$Type extends MessageType<RpcGetPendingJobs> {
         /* optional string filterById = 4; */
         if (message.filterById !== undefined)
             writer.tag(4, WireType.LengthDelimited).string(message.filterById);
+        /* optional string filterByKind = 5; */
+        if (message.filterByKind !== undefined)
+            writer.tag(5, WireType.LengthDelimited).string(message.filterByKind);
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);

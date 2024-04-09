@@ -1,0 +1,10 @@
+
+syntax = "proto3";
+
+message Log {
+  string id=1;
+  string log = 2;
+  string level = 3;
+  uint64 timestamp = 4;
+  string source = 5;
+}

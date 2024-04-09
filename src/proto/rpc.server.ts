@@ -18,7 +18,7 @@ import { RpcIsJobDone } from "./rpc";
 import { PendingJobs } from "./rpc";
 import { RpcGetPendingJobs } from "./rpc";
 import { RpcGetJob } from "./rpc";
-import { Job } from "./Protocol";
+import { Job } from "./Job";
 import { RpcRequestJob } from "./rpc";
 import { ServerCallContext } from "@protobuf-ts/runtime-rpc";
 /**

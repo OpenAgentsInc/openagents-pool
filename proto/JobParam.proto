@@ -1,0 +1,6 @@
+syntax = "proto3";
+
+message JobParam {
+  string key = 1;
+  repeated string value = 2;
+}

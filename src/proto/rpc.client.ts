@@ -22,7 +22,7 @@ import type { PendingJobs } from "./rpc";
 import type { RpcGetPendingJobs } from "./rpc";
 import type { RpcGetJob } from "./rpc";
 import { stackIntercept } from "@protobuf-ts/runtime-rpc";
-import type { Job } from "./Protocol";
+import type { Job } from "./Job";
 import type { RpcRequestJob } from "./rpc";
 import type { UnaryCall } from "@protobuf-ts/runtime-rpc";
 import type { RpcOptions } from "@protobuf-ts/runtime-rpc";

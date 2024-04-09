@@ -1,6 +1,12 @@
 syntax = "proto3";
 
-import "Protocol.proto";
+import "Log.proto";
+import "JobStatus.proto";
+import "JobState.proto";
+import "JobParam.proto";
+import "JobInput.proto";
+import "JobResult.proto";
+import "Job.proto";
 
 message RpcRequestJob {
     string runOn = 1;
@@ -21,6 +27,8 @@ message RpcGetPendingJobs {
     optional string filterByCustomer = 2;
     optional string filterByDescription = 3;
     optional string filterById = 4;
+    optional string filterByKind = 5;
+
 }
 
 message PendingJobs {

@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+import "Log.proto";
+import "JobStatus.proto";
+
+
+ 
+
+message JobState {
+  uint64 acceptedAt = 13;
+  string acceptedBy = 14;
+  JobStatus status = 15;
+  repeated Log logs = 17;
+  uint64 timestamp = 18;
+}
