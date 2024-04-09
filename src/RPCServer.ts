@@ -6,8 +6,6 @@ import { loadFileDescriptorSetFromBuffer } from "@grpc/proto-loader";
 import { INostrConnector } from "./proto/rpc.server";
 import { NostrConnector as NostrConnectorType, RpcSendSignedEventResponse } from "./proto/rpc";
 import {
-  RpcError,
-  RpcInputStream,
   ServerCallContext,
 } from "@protobuf-ts/runtime-rpc";
 
@@ -28,32 +26,12 @@ import {
     RpcUnsubscribeFromEventsRequest,
     RpcUnsubscribeFromEventsResponse,
     RpcJobComplete,
-    RpcJobLog,
+    RpcJobLog,    
 } from "./proto/rpc";
-import {
-    SimplePool,
-    EventTemplate,
-    Filter,
-    Event as NostrEvent,
-    UnsignedEvent,
-    finalizeEvent,
-    getPublicKey,
-} from "nostr-tools";
-import Utils from './Utils';
 import Job  from "./Job";
-import {  hexToBytes } from '@noble/hashes/utils' ;
 import NostrConnector from "./NostrConnector";
-import { Status } from "./proto/Protocol";
+import { JobStatus } from "./proto/JobStatus";
 import Fs from 'fs';
-import {
-    ServerUnaryCall,
-    sendUnaryData,
-    ServerWritableStream,
-    ServerReadableStream,
-    ServerDuplexStream,
-    ServerErrorResponse,
-    ServerInterceptor,
-} from "@grpc/grpc-js";
 
 class RpcNostrConnector implements INostrConnector {
     conn: NostrConnector;
@@ -72,11 +50,13 @@ class RpcNostrConnector implements INostrConnector {
         const customerFilter: RegExp = new RegExp(request.filterByCustomer || ".*");
         const runOnFilter: RegExp = new RegExp(request.filterByRunOn || ".*");
         const descriptionFilter: RegExp = new RegExp(request.filterByDescription || ".*");
+        const kindFilter: RegExp = new RegExp(request.filterByKind || ".*");
         const jobs = await this.conn.findJobs(
             jobIdFilter,
             runOnFilter,
             descriptionFilter,
             customerFilter,
+            kindFilter,
             true
         );
         const pendingJobs: PendingJobs = {
@@ -87,7 +67,7 @@ class RpcNostrConnector implements INostrConnector {
 
     async isJobDone(request: RpcGetJob, context: ServerCallContext): Promise<RpcIsJobDone> {
         const job = await this.getJob(request, context);
-        if (job&&job.state.status == Status.SUCCESS) {
+        if (job && job.state.status == JobStatus.SUCCESS) {
             return {
                 isDone: true,
             };

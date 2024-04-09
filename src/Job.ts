@@ -1,5 +1,12 @@
 import { Event } from "nostr-tools";
-import { Job as _Job, JobInput, Log, JobState, Status, JobResult, JobParam } from "./proto/Protocol";
+
+import { Job as _Job } from "./proto/Job";
+import { JobInput } from "./proto/JobInput";
+import { Log} from "./proto/Log";
+import { JobState} from "./proto/JobState";
+import { JobStatus} from "./proto/JobStatus";
+import {JobResult} from "./proto/JobResult";
+import { JobParam } from "./proto/JobParam";
 import Utils from "./Utils";
 import {
     SimplePool,
@@ -34,7 +41,7 @@ export default class Job implements _Job {
     };
     state: JobState = {
         logs: [],
-        status: Status.PENDING,
+        status: JobStatus.PENDING,
         acceptedAt: 0,
         acceptedBy: "",
         timestamp: 0,
@@ -96,6 +103,7 @@ export default class Job implements _Job {
             if (filterProvider && !filterProvider(provider)) {
                 return;
             }
+            const kind: number = event.kind;
             const runOn: string = Utils.getTagVars(event, ["param", "run-on"])[0][0] || "generic";
             const customerPublicKey: string = event.pubkey;
             const timestamp: number = Number(event.created_at) * 1000;
@@ -155,7 +163,7 @@ export default class Job implements _Job {
             // this.results = {};
             // this.states = {};
             this.input = inputs;
-
+            this.kind=kind;
             for (const r of relays) {
                 if (!this.relays.includes(r)) {
                     this.relays.push(r);
@@ -213,6 +221,7 @@ export default class Job implements _Job {
                             if (logs[i].timestamp > timestamp) {
                                 logs.splice(i, 0, log);
                                 added = true;
+                                break;
                             }
                         }
                         if (!added) logs.push(log);
@@ -221,15 +230,15 @@ export default class Job implements _Job {
 
                 if (state.timestamp < timestamp) {
                     if (status == "success") {
-                        state.status = Status.SUCCESS;
+                        state.status = JobStatus.SUCCESS;
                     } else if (status == "processing") {
                         state.acceptedAt = timestamp;
                         state.acceptedBy = provider;
-                        state.status = Status.PROCESSING;
+                        state.status = JobStatus.PROCESSING;
                     } else if (status == "error") {
                         state.acceptedAt = 0;
                         state.acceptedBy = "";
-                        state.status = Status.ERROR;
+                        state.status = JobStatus.ERROR;
                     }
                     state.timestamp = timestamp;
                 }
@@ -247,10 +256,10 @@ export default class Job implements _Job {
     }
 
     isAvailable() {
-        if (this.state.status == Status.SUCCESS) return false;
+        if (this.state.status == JobStatus.SUCCESS) return false;
         if (this.isExpired()) return false;
         if (
-            this.state.status == Status.PROCESSING &&
+            this.state.status == JobStatus.PROCESSING &&
             this.state.acceptedAt &&
             Date.now() - this.state.acceptedAt < this.maxExecutionTime
         ) {
@@ -268,7 +277,7 @@ export default class Job implements _Job {
         const state = this.state;
         state.acceptedAt = t;
         state.acceptedBy = pk;
-        state.status = Status.PROCESSING;
+        state.status = JobStatus.PROCESSING;
 
         const customerPublicKey = this.customerPublicKey;
         const feedbackEvent: EventTemplate = {
@@ -291,7 +300,7 @@ export default class Job implements _Job {
         const state = this.state;
         state.acceptedAt = 0;
         state.acceptedBy = "";
-        state.status = Status.ERROR;
+        state.status = JobStatus.ERROR;
 
         const customerPublicKey = this.customerPublicKey;
         const feedbackEvent: EventTemplate = {
@@ -299,7 +308,7 @@ export default class Job implements _Job {
             content: reason,
             created_at: Math.floor(Date.now() / 1000),
             tags: [
-                ["status", "error"],
+                ["status", "error", reason],
                 ["e", this.id],
                 ["p", customerPublicKey],
                 ["expiration", "" + Math.floor(this.expiration / 1000)],
@@ -354,7 +363,7 @@ export default class Job implements _Job {
             ],
         };
         events.push(finalizeEvent(feedbackEvent, sk));
-        this.state.status = Status.SUCCESS;
+        this.state.status = JobStatus.SUCCESS;
         this.state.timestamp = Date.now();
         return events;
     }

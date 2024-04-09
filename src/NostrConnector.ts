@@ -15,9 +15,11 @@ import Utils from './Utils';
 import Job  from "./Job";
 
 import {  hexToBytes } from '@noble/hashes/utils' ;
-import { JobInput, JobParam } from "./proto/Protocol";
+import { JobInput } from "./proto/JobInput";
+import { JobParam } from "./proto/JobParam";
 import Ws from "ws";
 useWebSocketImplementation(Ws);
+
 type CustomSubscription = {
     filters: Filter[];
     subscriptionId: string;
@@ -210,19 +212,26 @@ export default class NostrConnector {
     }
 
     async _loop() {
-        await this.evictExpired();
-        setTimeout(this._loop.bind(this), 1000);
+        try{
+            await this.evictExpired();
+        }catch(e){
+            console.error("Error looping",e);
+        }
+        setTimeout(() => this._loop(), 1000);
     }
 
     async evictExpired() {
-        for (let i = 0; i < this.jobs.length; i++) {
-            const job = this.jobs[i];
-            await this.closeAllCustomSubscriptions(job.id);
-            if (job.isExpired()) {
-                this.jobs.splice(i, 1);
-                i--;
+        let nJobs = this.jobs.length;
+        const expiredJobs = this.jobs.filter((job) => job.isExpired());
+        for (const job of expiredJobs) {
+            try{
+                await this.closeAllCustomSubscriptions(job.id);
+            }catch(e){
+                console.error("Error closing custom subscriptions",e);
             }
         }
+        this.jobs = this.jobs.filter((job) => expiredJobs.indexOf(job) === -1);       
+        if(nJobs!=this.jobs.length)console.log("Evicted",nJobs-this.jobs.length,"jobs");
     }
 
     async _resolveJobInputs(job: Job) {
@@ -253,6 +262,7 @@ export default class NostrConnector {
         runOnFilter: RegExp,
         descriptionFilter: RegExp,
         customerFilter: RegExp,
+        kindFilter: RegExp,
         isAvailable: boolean
     ): Promise<Array<Job>> {
         const jobs: Array<Job> = [];
@@ -264,7 +274,8 @@ export default class NostrConnector {
                 jobIdFilter.test(job.id) &&
                 runOnFilter.test(job.runOn) &&
                 descriptionFilter.test(job.description) &&
-                customerFilter.test(job.customerPublicKey)
+                customerFilter.test(job.customerPublicKey) &&
+                kindFilter.test(job.kind.toString())
             ) {
                 jobs.push(job);
             }
@@ -279,8 +290,10 @@ export default class NostrConnector {
         let job: Job | undefined = this.jobs.find((job) => job.id === id);
         if (!job && createIfMissing) {
             job = new Job(this.maxEventDuration, "", "", [], [], this.maxJobExecutionTime);
+            job.id = id;
             this.jobs.push(job);
         }
+        console.log(this.jobs.length, "jobs");
         if (job) {
             await this._resolveJobInputs(job);
             if (!job.areInputsAvailable()) {

@@ -1,6 +1,5 @@
 import RPCServer from "./RPCServer";
 import Fs from "fs";
-import Path from "path";
 import Express from "express";
 import NostrConnector from "./NostrConnector";
 import { generateSecretKey } from "nostr-tools";
@@ -11,10 +10,9 @@ async function main(){
     const PORT = Number(process.env.NOSTR_CONNECT_GRPC_BINDING_PORT || 5000);
     const DESCRIPTOR_PATH= process.env.NOSTR_CONNECT_GRPC_DESCRIPTOR_PATH || "./docs/descriptor.pb";
     const SECRET_KEY = process.env.NOSTR_CONNECT_SECRET_KEY || bytesToHex(generateSecretKey());
+    const RELAYS = (process.env.NOSTR_CONNECT_RELAYS || "wss://nostr.rblb.it:7777").split(",");
 
-    const nostr = new NostrConnector(SECRET_KEY,["wss://nostr.rblb.it:7777"],undefined);
-
-
+    const nostr = new NostrConnector(SECRET_KEY, RELAYS, undefined);
     const server = new RPCServer(IP, PORT, DESCRIPTOR_PATH, nostr);
     await server.start();
 
