@@ -174,7 +174,7 @@ export default class Node implements _Node {
                 {
                     name: this.name,
                     picture: this.iconUrl || "",
-                    description: this.description,
+                    about: this.description,
                     eventTemplates: this.eventTemplates.map((e) => {
                         try{
                             let ev: any = JSON.parse(e);
