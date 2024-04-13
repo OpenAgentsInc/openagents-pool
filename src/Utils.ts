@@ -1,14 +1,20 @@
 import { Event } from "nostr-tools";
 import { uuid as uuidv4 } from "uuidv4";
+import Crypto from "crypto";
 
 export default class Utils {
-    static newUUID(){
+    static newUUID() {
         return uuidv4();
     }
-    static getTagVars(
-        event: Event,
-        tagName: Array<string> | string
-    ): Array<Array<string>> {
+    static uuidFrom(v:any):string{
+        if(typeof v=="string"){
+            return Crypto.createHash("sha256").update(v as string).digest("hex");
+        }else{
+            v=JSON.stringify(v);
+            return Utils.uuidFrom(v);
+        }
+    }
+    static getTagVars(event: Event, tagName: Array<string> | string): Array<Array<string>> {
         const results = new Array<Array<string>>();
         for (const t of event.tags) {
             let isMatch = true;
@@ -26,10 +32,14 @@ export default class Utils {
             const values: Array<string> = t.slice(Array.isArray(tagName) ? tagName.length : 1);
             results.push(values);
         }
-        if(results.length==0){
+        if (results.length == 0) {
             results.push([]);
         }
         return results;
     }
 
+    static fixParameterizedJSON(json: string): string {
+        json=json.replace(/(")(%.+_NUMBER%)(")/gim, "$2");
+        return json;     
+    }
 }

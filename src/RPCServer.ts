@@ -2,14 +2,19 @@ import * as GRPC from "@grpc/grpc-js";
 import * as GPRCBackend from "@protobuf-ts/grpc-backend";
 import { ReflectionService } from "@grpc/reflection";
 import { loadFileDescriptorSetFromBuffer } from "@grpc/proto-loader";
+import Auth from "./Auth";
 
-import { INostrConnector } from "./proto/rpc.server";
-import { NostrConnector as NostrConnectorType, RpcSendSignedEventResponse } from "./proto/rpc";
+ 
 import {
   ServerCallContext,
 } from "@protobuf-ts/runtime-rpc";
 
 import {
+    NostrConnector as NostrConnectorType,
+    RpcAnnounceNodeRequest,
+    RpcAnnounceTemplateRequest,
+    RpcAnnounceTemplateResponse,
+    RpcSendSignedEventResponse,
     RpcGetEventsResponse,
     RpcGetEventsRequest,
     RpcSubscribeToEventsResponse,
@@ -26,11 +31,14 @@ import {
     RpcUnsubscribeFromEventsRequest,
     RpcUnsubscribeFromEventsResponse,
     RpcJobComplete,
-    RpcJobLog,    
-} from "./proto/rpc";
+    RpcJobLog,
+    RpcAnnounceNodeResponse,
+    JobStatus,
+    INostrConnector
+} from "openagents-grpc-proto";
 import Job  from "./Job";
 import NostrConnector from "./NostrConnector";
-import { JobStatus } from "./proto/JobStatus";
+
 import Fs from 'fs';
 
 class RpcNostrConnector implements INostrConnector {
@@ -39,19 +47,27 @@ class RpcNostrConnector implements INostrConnector {
         this.conn = conn;
     }
 
+
+    getNodeId(context: ServerCallContext): string {
+        return context.headers["nodeid"] as string;
+    }
+
     async getJob(request: RpcGetJob, context: ServerCallContext): Promise<Job> {
+        const nodeId = this.getNodeId(context);
         const id = request.jobId;
-        const job = await this.conn.getJob(id);
+        const job = await this.conn.getJob(nodeId, id);
         return job;
     }
 
     async getPendingJobs(request: RpcGetPendingJobs, context: ServerCallContext): Promise<PendingJobs> {
+        const nodeId = this.getNodeId(context);
         const jobIdFilter: RegExp = new RegExp(request.filterById || ".*");
         const customerFilter: RegExp = new RegExp(request.filterByCustomer || ".*");
         const runOnFilter: RegExp = new RegExp(request.filterByRunOn || ".*");
         const descriptionFilter: RegExp = new RegExp(request.filterByDescription || ".*");
         const kindFilter: RegExp = new RegExp(request.filterByKind || ".*");
         const jobs = await this.conn.findJobs(
+            nodeId,
             jobIdFilter,
             runOnFilter,
             descriptionFilter,
@@ -66,6 +82,7 @@ class RpcNostrConnector implements INostrConnector {
     }
 
     async isJobDone(request: RpcGetJob, context: ServerCallContext): Promise<RpcIsJobDone> {
+        const nodeId = this.getNodeId(context);
         const job = await this.getJob(request, context);
         if (job && job.state.status == JobStatus.SUCCESS) {
             return {
@@ -79,34 +96,41 @@ class RpcNostrConnector implements INostrConnector {
     }
 
     acceptJob(request: RpcAcceptJob, context: ServerCallContext): Promise<Job> {
-        return this.conn.acceptJob(request.jobId);
+        const nodeId = this.getNodeId(context);
+        return this.conn.acceptJob(nodeId, request.jobId);
     }
 
     cancelJob(request: RpcCancelJob, context: ServerCallContext): Promise<Job> {
-        return this.conn.cancelJob(request.jobId, request.reason);
+        const nodeId = this.getNodeId(context);
+        return this.conn.cancelJob(nodeId, request.jobId, request.reason);
     }
 
     outputForJob(request: RpcJobOutput, context: ServerCallContext): Promise<Job> {
-        return this.conn.outputForJob(request.jobId, request.output);
+        const nodeId = this.getNodeId(context);
+        return this.conn.outputForJob(nodeId, request.jobId, request.output);
     }
 
     completeJob(request: RpcJobComplete, context: ServerCallContext): Promise<Job> {
-        return this.conn.completeJob(request.jobId, request.output);
+        const nodeId = this.getNodeId(context);
+        return this.conn.completeJob(nodeId, request.jobId, request.output);
     }
 
     logForJob(request: RpcJobLog, context: ServerCallContext): Promise<Job> {
-        return this.conn.logForJob(request.jobId, request.log);
+        const nodeId = this.getNodeId(context);
+        return this.conn.logForJob(nodeId, request.jobId, request.log);
     }
 
     requestJob(request: RpcRequestJob, context: ServerCallContext): Promise<Job> {
+        const nodeId = this.getNodeId(context);
         return this.conn.requestJob(
+            nodeId,
             request.runOn,
             request.expireAfter,
             request.input,
             request.param,
             request.description,
             request.kind,
-            request.outputFormat
+            request.outputFormat,
         );
     }
 
@@ -114,6 +138,7 @@ class RpcNostrConnector implements INostrConnector {
         request: RpcSendSignedEventRequest,
         context: ServerCallContext
     ): Promise<RpcSendSignedEventResponse> {
+        const nodeId = this.getNodeId(context);
         await this.conn.sendSignedEvent(request.event);
         return {
             parentJob: request.parentJob,
@@ -125,6 +150,7 @@ class RpcNostrConnector implements INostrConnector {
         request: RpcSubscribeToEventsRequest,
         context: ServerCallContext
     ): Promise<RpcSubscribeToEventsResponse> {
+        const nodeId = this.getNodeId(context);
         const subId = await this.conn.openCustomSubscription(request.parentJob, request.filters);
         return {
             parentJob: request.parentJob,
@@ -134,6 +160,7 @@ class RpcNostrConnector implements INostrConnector {
 
 
     async getEvents(request: RpcGetEventsRequest, context: ServerCallContext): Promise<RpcGetEventsResponse> {
+        const nodeId = this.getNodeId(context);
         const events: string[] = await this.conn.getAndConsumeCustomEvents(
             request.parentJob,
             request.subscriptionId,
@@ -151,9 +178,37 @@ class RpcNostrConnector implements INostrConnector {
         request: RpcUnsubscribeFromEventsRequest,
         context: ServerCallContext
     ): Promise<RpcUnsubscribeFromEventsResponse> {
+        const nodeId = this.getNodeId(context);
         await this.conn.closeCustomSubscription(request.parentJob, request.subscriptionId);
         return {
             success: true,
+        };
+    }
+
+    async announceNode(request: RpcAnnounceNodeRequest, context: ServerCallContext): Promise<RpcAnnounceNodeResponse> {
+        const nodeId = this.getNodeId(context);
+        const [node, timeout] = await this.conn.registerNode(
+            nodeId,
+            request.name,
+            request.iconUrl,
+            request.description
+        );
+        return {
+            success: true,
+            node: node,
+            refreshInterval: timeout
+        };
+    }
+
+    async announceEventTemplate(request: RpcAnnounceTemplateRequest, context: ServerCallContext): Promise<RpcAnnounceTemplateResponse> {
+        const nodeId = this.getNodeId(context);
+        const node = this.conn.getNode(nodeId);
+        if(!node) throw new Error("Node not found");
+        const timeout = node.registerTemplate(request.eventTemplate);        
+        return {
+            success: true,
+            node: node,
+            refreshInterval: timeout
         };
     }
 }
@@ -164,42 +219,72 @@ export default class RPCServer {
     port: number;
     descriptorPath: string;
     nostrConnector: NostrConnector;
-    constructor(addr:string, port:number, descriptorPath:string,nostrConnector: NostrConnector) {
+    caCrt: Buffer | undefined;
+    serverCrt: Buffer | undefined;
+    serverKey: Buffer | undefined;
+    constructor(
+        addr: string,
+        port: number,
+        descriptorPath: string,
+        nostrConnector: NostrConnector,
+        caCrt?: Buffer,
+        serverCrt?: Buffer,
+        serverKey?: Buffer
+    ) {
         this.addr = addr;
         this.port = port;
         this.descriptorPath = descriptorPath;
-        this.nostrConnector=nostrConnector;
+        this.nostrConnector = nostrConnector;
+        this.caCrt = caCrt;
+        this.serverCrt = serverCrt;
+        this.serverKey = serverKey;
     }
 
     async start() {
+       
         return new Promise((resolve, reject) => {
-            
             const server = new GRPC.Server({
                 interceptors: [],
             });
 
-            server.addService(...GPRCBackend.adaptService(NostrConnectorType, new RpcNostrConnector(this.nostrConnector)));
-            if(Fs.existsSync(this.descriptorPath)){
+           
+            
+            server.addService(
+                ...Auth.adaptService(
+                    GPRCBackend.adaptService(NostrConnectorType, new RpcNostrConnector(this.nostrConnector))
+                )
+            );
+
+            if (Fs.existsSync(this.descriptorPath)) {
                 const descriptorSetBuffer = Fs.readFileSync(this.descriptorPath);
-                const pkg = loadFileDescriptorSetFromBuffer(descriptorSetBuffer); 
+                const pkg = loadFileDescriptorSetFromBuffer(descriptorSetBuffer);
                 const reflection = new ReflectionService(pkg);
                 reflection.addToServer(server);
             }
             server.bindAsync(
                 `${this.addr}:${this.port}`,
-                GRPC.ServerCredentials.createInsecure(),
+                this.caCrt && this.serverCrt && this.serverKey
+                    ? GRPC.ServerCredentials.createSsl(
+                          this.caCrt,
+                          [
+                              {
+                                  private_key: this.serverKey,
+                                  cert_chain: this.serverCrt,
+                              },
+                          ],
+                          false
+                      )
+                    : GRPC.ServerCredentials.createInsecure(),
                 (err: Error | null, port: number) => {
                     if (err) {
-                      reject(err);
+                        reject(err);
                         console.error(`Server error: ${err.message}`);
                     } else {
                         resolve(true);
                         console.log(`Server bound on port: ${port}`);
                     }
-                    
                 }
             );
-            
         });
     }
 }

@@ -1,12 +1,7 @@
 import { Event } from "nostr-tools";
 
-import { Job as _Job } from "./proto/Job";
-import { JobInput } from "./proto/JobInput";
-import { Log} from "./proto/Log";
-import { JobState} from "./proto/JobState";
-import { JobStatus} from "./proto/JobStatus";
-import {JobResult} from "./proto/JobResult";
-import { JobParam } from "./proto/JobParam";
+import { Job as _Job, JobInput, Log, JobState, JobStatus, JobResult, JobParam } from "openagents-grpc-proto";
+
 import Utils from "./Utils";
 import {
     SimplePool,
@@ -49,7 +44,7 @@ export default class Job implements _Job {
     expireAfter: number;
     maxExecutionTime: number;
     outputFormat: string = "application/json";
-
+    nodeId: string = "";
     constructor(
         expireAfter: number,
         runOn: string,
@@ -59,12 +54,14 @@ export default class Job implements _Job {
         maxExecutionTime: number,
         relays?: string[],
         kind?: number,
-        outputFormat?: string
+        outputFormat?: string,
+        nodeId?: string
     ) {
         this.timestamp = Date.now();
         this.expireAfter = expireAfter;
         this.expiration = this.timestamp + expireAfter;
         this.maxExecutionTime = maxExecutionTime;
+        this.nodeId = nodeId || "";
 
         if (outputFormat) {
             this.outputFormat = outputFormat;
@@ -112,6 +109,7 @@ export default class Job implements _Job {
                     timestamp + this.expireAfter,
                 timestamp + this.expireAfter
             );
+            const nodeId = Utils.getTagVars(event, ["d"])[0][0] || "";
 
             const relays: Array<string> = Utils.getTagVars(event, ["relays"])[0] || defaultRelays;
             // const bid = Utils.getTagVars(event, ["bid"], 1)[0];
@@ -152,6 +150,7 @@ export default class Job implements _Job {
                 });
             }
 
+            this.nodeId = nodeId;
             this.id = id;
             this.runOn = runOn;
             this.expiration = expiration;
@@ -163,7 +162,7 @@ export default class Job implements _Job {
             // this.results = {};
             // this.states = {};
             this.input = inputs;
-            this.kind=kind;
+            this.kind = kind;
             for (const r of relays) {
                 if (!this.relays.includes(r)) {
                     this.relays.push(r);
@@ -197,7 +196,7 @@ export default class Job implements _Job {
             }
 
             const timestamp = Number(event.created_at) * 1000;
-
+            const nodeId= Utils.getTagVars(event, ["d"])[0][0] || "";
             if (event.kind == 7000) {
                 // TODO: content?
                 let [status, info] = Utils.getTagVars(event, ["status"])[0];
@@ -207,6 +206,7 @@ export default class Job implements _Job {
 
                 if (info) {
                     const log: Log = {
+                        nodeId,
                         id: event.id,
                         timestamp,
                         log: info,
@@ -272,7 +272,7 @@ export default class Job implements _Job {
         return this.expiration < Date.now();
     }
 
-    async accept(pk: string, sk: Uint8Array): Promise<Array<VerifiedEvent>> {
+    async accept(nodeId: string, pk: string, sk: Uint8Array): Promise<Array<VerifiedEvent>> {
         const t = Date.now();
         const state = this.state;
         state.acceptedAt = t;
@@ -288,6 +288,7 @@ export default class Job implements _Job {
                 ["status", "processing"],
                 ["e", this.id],
                 ["p", customerPublicKey],
+                ["d", nodeId],
                 ["expiration", "" + Math.floor(this.expiration / 1000)],
             ],
         };
@@ -296,7 +297,7 @@ export default class Job implements _Job {
         return events;
     }
 
-    async cancel(pk: string, sk: Uint8Array, reason: string): Promise<Array<VerifiedEvent>> {
+    async cancel(nodeId: string, pk: string, sk: Uint8Array, reason: string): Promise<Array<VerifiedEvent>> {
         const state = this.state;
         state.acceptedAt = 0;
         state.acceptedBy = "";
@@ -311,6 +312,7 @@ export default class Job implements _Job {
                 ["status", "error", reason],
                 ["e", this.id],
                 ["p", customerPublicKey],
+                ["d", nodeId],
                 ["expiration", "" + Math.floor(this.expiration / 1000)],
             ],
         };
@@ -323,12 +325,13 @@ export default class Job implements _Job {
             log: reason,
             level: "error",
             source: pk,
+            nodeId: nodeId,
         });
 
         return events;
     }
 
-    async output(pk: string, sk: Uint8Array, data: string): Promise<Array<VerifiedEvent>> {
+    async output(nodeId: string, pk: string, sk: Uint8Array, data: string): Promise<Array<VerifiedEvent>> {
         const t = Date.now();
         const resultEvent: EventTemplate = {
             kind: 6003,
@@ -338,6 +341,7 @@ export default class Job implements _Job {
                 ["e", this.id],
                 ["p", this.customerPublicKey],
                 ["expiration", "" + Math.floor(this.expiration / 1000)],
+                ["d", nodeId],
             ],
         };
         this.result.content = data;
@@ -348,9 +352,15 @@ export default class Job implements _Job {
         return events;
     }
 
-    async complete(pk: string, sk: Uint8Array, result: any, info?: string): Promise<Array<VerifiedEvent>> {
+    async complete(
+        nodeId: string,
+        pk: string,
+        sk: Uint8Array,
+        result: any,
+        info?: string
+    ): Promise<Array<VerifiedEvent>> {
         const events: Array<VerifiedEvent> = [];
-        events.push(...(await this.output(pk, sk, result)));
+        events.push(...(await this.output(nodeId, pk, sk, result)));
         const feedbackEvent: EventTemplate = {
             kind: 7000,
             content: info || "",
@@ -360,6 +370,7 @@ export default class Job implements _Job {
                 ["e", this.id],
                 ["p", this.customerPublicKey],
                 ["expiration", "" + Math.floor(this.expiration / 1000)],
+                ["d", nodeId],
             ],
         };
         events.push(finalizeEvent(feedbackEvent, sk));
@@ -368,7 +379,7 @@ export default class Job implements _Job {
         return events;
     }
 
-    async log(pk: string, sk: Uint8Array, log: string): Promise<Array<VerifiedEvent>> {
+    async log(nodeId:string, pk: string, sk: Uint8Array, log: string): Promise<Array<VerifiedEvent>> {
         const t = Date.now();
         const state = this.state;
         const feedbackEvent: EventTemplate = {
@@ -380,6 +391,7 @@ export default class Job implements _Job {
                 ["e", this.id],
                 ["p", this.customerPublicKey],
                 ["expiration", "" + Math.floor(this.expiration / 1000)],
+                ["d", nodeId]
             ],
         };
         const events: Array<VerifiedEvent> = [];
@@ -390,6 +402,7 @@ export default class Job implements _Job {
             log: log,
             level: "log",
             source: pk,
+            nodeId: nodeId
         });
         return events;
     }
@@ -445,6 +458,7 @@ export default class Job implements _Job {
                 ["param", "run-on", this.runOn],
                 ["param", "description", this.description],
                 ["output", this.outputFormat],
+                ["d", this.nodeId],
             ],
         };
 
