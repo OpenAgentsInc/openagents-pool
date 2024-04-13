@@ -176,14 +176,16 @@ export default class Node implements _Node {
                     picture: this.iconUrl || "",
                     description: this.description,
                     eventTemplates: this.eventTemplates.map((e) => {
-                        let ev: any = JSON.parse(e);
-                        ev.created_at = "%TIMESTAMP_SECONDS_NUMBER%";
-                        ev.tags = ev.tags.filter((t) => t[0] !== "expiration") as any;
-                        ev.tags.push(["expiration", "%EXPIRATION_TIMESTAMP_SECONDS%"]);
-                        ev=JSON.stringify(ev, null, 2);
-                        ev=Utils.fixParameterizedJSON(ev);
-                        return ev;
-                    }),
+                        try{
+                            let ev: any = JSON.parse(e);
+                            ev.created_at = "%TIMESTAMP_SECONDS_NUMBER%";
+                            ev.tags = ev.tags.filter((t) => t[0] !== "expiration") as any;
+                            ev.tags.push(["expiration", "%EXPIRATION_TIMESTAMP_SECONDS%"]);
+                            return ev;
+                        }catch(e){
+                            return undefined;
+                        }
+                    }).filter((e) => e),
                 },
                 null, 2
             ),
