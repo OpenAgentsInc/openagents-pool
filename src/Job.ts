@@ -114,7 +114,10 @@ export default class Job implements _Job {
             const relays: Array<string> = Utils.getTagVars(event, ["relays"])[0] || defaultRelays;
             // const bid = Utils.getTagVars(event, ["bid"], 1)[0];
             // const t = Utils.getTagVars(event, ["t"], 1)[0];
-            const description: string = Utils.getTagVars(event, ["param", "description"])[0][0] || "";
+            const description: string =
+                Utils.getTagVars(event, ["about"])[0][0] ||
+                Utils.getTagVars(event, ["param", "description"])[0][0] ||
+                "";
 
             const params: string[][] = Utils.getTagVars(event, ["param"]);
             for (const p of params) {
@@ -456,7 +459,7 @@ export default class Job implements _Job {
                 ["expiration", "" + Math.floor(this.expiration / 1000)],
                 this.relays ? ["relays", ...this.relays] : undefined,
                 ["param", "run-on", this.runOn],
-                ["param", "description", this.description],
+                [ "about", this.description],
                 ["output", this.outputFormat],
                 ["d", this.nodeId],
             ],
