@@ -10,7 +10,7 @@ import {
 } from "@protobuf-ts/runtime-rpc";
 
 import {
-    NostrConnector as NostrConnectorType,
+    PoolConnector,
     RpcAnnounceNodeRequest,
     RpcAnnounceTemplateRequest,
     RpcAnnounceTemplateResponse,
@@ -34,19 +34,18 @@ import {
     RpcJobLog,
     RpcAnnounceNodeResponse,
     JobStatus,
-    INostrConnector
+    IPoolConnector
 } from "openagents-grpc-proto";
 import Job  from "./Job";
 import NostrConnector from "./NostrConnector";
 
 import Fs from 'fs';
 
-class RpcNostrConnector implements INostrConnector {
+class RpcConnector implements IPoolConnector {
     conn: NostrConnector;
-    constructor(conn){
+    constructor(conn) {
         this.conn = conn;
     }
-
 
     getNodeId(context: ServerCallContext): string {
         return context.headers["nodeid"] as string;
@@ -130,7 +129,7 @@ class RpcNostrConnector implements INostrConnector {
             request.param,
             request.description,
             request.kind,
-            request.outputFormat,
+            request.outputFormat
         );
     }
 
@@ -141,7 +140,7 @@ class RpcNostrConnector implements INostrConnector {
         const nodeId = this.getNodeId(context);
         await this.conn.sendSignedEvent(request.event);
         return {
-            parentJob: request.parentJob,
+            groupId: request.groupId,
             success: true,
         } as RpcSendSignedEventResponse;
     }
@@ -151,23 +150,22 @@ class RpcNostrConnector implements INostrConnector {
         context: ServerCallContext
     ): Promise<RpcSubscribeToEventsResponse> {
         const nodeId = this.getNodeId(context);
-        const subId = await this.conn.openCustomSubscription(request.parentJob, request.filters);
+        const subId = await this.conn.openCustomSubscription(request.groupId, request.filters);
         return {
-            parentJob: request.parentJob,
+            groupId: request.groupId,
             subscriptionId: subId,
         };
     }
 
-
     async getEvents(request: RpcGetEventsRequest, context: ServerCallContext): Promise<RpcGetEventsResponse> {
         const nodeId = this.getNodeId(context);
         const events: string[] = await this.conn.getAndConsumeCustomEvents(
-            request.parentJob,
+            request.groupId,
             request.subscriptionId,
             request.limit
         );
         return {
-            parentJob: request.parentJob,
+            groupId: request.groupId,
             subscriptionId: request.subscriptionId,
             count: events.length,
             events,
@@ -179,13 +177,16 @@ class RpcNostrConnector implements INostrConnector {
         context: ServerCallContext
     ): Promise<RpcUnsubscribeFromEventsResponse> {
         const nodeId = this.getNodeId(context);
-        await this.conn.closeCustomSubscription(request.parentJob, request.subscriptionId);
+        await this.conn.closeCustomSubscription(request.groupId, request.subscriptionId);
         return {
             success: true,
         };
     }
 
-    async announceNode(request: RpcAnnounceNodeRequest, context: ServerCallContext): Promise<RpcAnnounceNodeResponse> {
+    async announceNode(
+        request: RpcAnnounceNodeRequest,
+        context: ServerCallContext
+    ): Promise<RpcAnnounceNodeResponse> {
         const nodeId = this.getNodeId(context);
         const [node, timeout] = await this.conn.registerNode(
             nodeId,
@@ -196,19 +197,22 @@ class RpcNostrConnector implements INostrConnector {
         return {
             success: true,
             node: node,
-            refreshInterval: timeout
+            refreshInterval: timeout,
         };
     }
 
-    async announceEventTemplate(request: RpcAnnounceTemplateRequest, context: ServerCallContext): Promise<RpcAnnounceTemplateResponse> {
+    async announceEventTemplate(
+        request: RpcAnnounceTemplateRequest,
+        context: ServerCallContext
+    ): Promise<RpcAnnounceTemplateResponse> {
         const nodeId = this.getNodeId(context);
         const node = this.conn.getNode(nodeId);
-        if(!node) throw new Error("Node not found");
-        const timeout = node.registerTemplate(request.eventTemplate);        
+        if (!node) throw new Error("Node not found");
+        const timeout = node.registerTemplate(request.eventTemplate);
         return {
             success: true,
             node: node,
-            refreshInterval: timeout
+            refreshInterval: timeout,
         };
     }
 }
@@ -251,7 +255,7 @@ export default class RPCServer {
             
             server.addService(
                 ...Auth.adaptService(
-                    GPRCBackend.adaptService(NostrConnectorType, new RpcNostrConnector(this.nostrConnector))
+                    GPRCBackend.adaptService(PoolConnector, new RpcConnector(this.nostrConnector))
                 )
             );
 

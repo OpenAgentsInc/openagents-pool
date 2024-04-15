@@ -24,10 +24,10 @@ useWebSocketImplementation(Ws);
 type CustomSubscription = {
     filters: Filter[];
     subscriptionId: string;
-    subCloser: SubCloser;   
-    parentJobId: string;
+    subCloser: SubCloser;
+    groupId: string;
     events: Event[];
-}
+};
 
 export default class NostrConnector {
     relays: Array<string>;
@@ -102,17 +102,17 @@ export default class NostrConnector {
         );
     }
 
-    async openCustomSubscription(parentJob: string, filters: string[]): Promise<string> {
+    async openCustomSubscription(groupId: string, filters: string[]): Promise<string> {
         const parsedFilters: Filter[] = filters.map((filter) => {
             return JSON.parse(filter) as Filter;
         });
 
         const subId = Utils.newUUID();
         const process = async (sub: SubCloser, event: Event | undefined) => {
-            let customSubs: CustomSubscription[] | undefined = this.customSubscriptions.get(parentJob);
+            let customSubs: CustomSubscription[] | undefined = this.customSubscriptions.get(groupId);
             if (!customSubs) {
                 customSubs = [];
-                this.customSubscriptions.set(parentJob, customSubs);
+                this.customSubscriptions.set(groupId, customSubs);
             }
             let customSub: CustomSubscription | undefined = customSubs.find(
                 (customSub) => customSub.subscriptionId === subId
@@ -122,7 +122,7 @@ export default class NostrConnector {
                     filters: parsedFilters,
                     subscriptionId: subId,
                     subCloser: sub,
-                    parentJobId: parentJob,
+                    groupId: groupId,
                     events: [],
                 };
                 customSubs.push(customSub);
@@ -142,8 +142,8 @@ export default class NostrConnector {
         return subId;
     }
 
-    async closeCustomSubscription(parentJob: string, subscriptionId: string) {
-        let customSubs: CustomSubscription[] | undefined = this.customSubscriptions.get(parentJob);
+    async closeCustomSubscription(groupId: string, subscriptionId: string) {
+        let customSubs: CustomSubscription[] | undefined = this.customSubscriptions.get(groupId);
         if (!customSubs) {
             return;
         }
@@ -155,11 +155,11 @@ export default class NostrConnector {
         }
         customSub.subCloser.close();
         customSubs = customSubs.filter((customSub) => customSub.subscriptionId !== subscriptionId);
-        this.customSubscriptions.set(parentJob, customSubs);
+        this.customSubscriptions.set(groupId, customSubs);
     }
 
-    async closeAllCustomSubscriptions(parentJob: string) {
-        let customSubs: CustomSubscription[] | undefined = this.customSubscriptions.get(parentJob);
+    async closeAllCustomSubscriptions(groupId: string) {
+        let customSubs: CustomSubscription[] | undefined = this.customSubscriptions.get(groupId);
         if (!customSubs) {
             return;
         }
@@ -167,15 +167,15 @@ export default class NostrConnector {
             customSub.subCloser.close();
         }
         customSubs = [];
-        this.customSubscriptions.set(parentJob, customSubs);
+        this.customSubscriptions.set(groupId, customSubs);
     }
 
     async getAndConsumeCustomEvents(
-        parentJob: string,
+        groupId: string,
         subscriptionId: string,
         limit: number
     ): Promise<string[]> {
-        let customSubs: CustomSubscription[] | undefined = this.customSubscriptions.get(parentJob);
+        let customSubs: CustomSubscription[] | undefined = this.customSubscriptions.get(groupId);
         if (!customSubs) return [];
         const customSub: CustomSubscription | undefined = customSubs.find(
             (customSub) => customSub.subscriptionId === subscriptionId
