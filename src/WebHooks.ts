@@ -4,7 +4,7 @@
 export default class WebHooks {
     hooks: string[];
     constructor(hooks: string[]) {
-        this.hooks = hooks;
+        this.hooks = hooks.filter((hook) => hook )
     }
 
     async call(obj: any) {
