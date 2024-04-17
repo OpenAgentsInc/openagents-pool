@@ -1,5 +1,4 @@
 import { EventTemplate as NostrEventTemplate } from 'nostr-tools';
-import { Node as _Node } from "openagents-grpc-proto";
 
 import {
     SimplePool,
@@ -61,20 +60,22 @@ type EventTemplateRegistration = {
     uuid: string;
     eventId: number;
     timestamp: number;  
-    kind: number;
+    meta: {[key:string]:string|number};
+    template: string;   
+    sockets: {};
 }
 
-export default class Node implements _Node {
+export default class Node  {
     id: string;
     iconUrl: string = "";
     name: string = "";
     description: string = "";
-    eventTemplates: string[] = [];
     eventRegistration: EventTemplateRegistration[] = [];
     timestamp: number;
     announcementTimeout: number;
     updateNeeded: boolean = false;
     lastUpdate: number = 0;
+    
 
     constructor(
         id: string,
@@ -116,19 +117,18 @@ export default class Node implements _Node {
         return this.announcementTimeout;
     }
 
-    registerTemplate(template: string) : number{
+    registerTemplate(meta: string, template: string, sockets: string) : number{
         const uuid = Utils.uuidFrom(template);
         const existingReg = this.eventRegistration.find((reg) => reg.uuid === uuid);
         if (!existingReg) {
-            const eventObject: NostrEventTemplate = JSON.parse(template) ;
-            const kind = eventObject.kind;
             this.eventRegistration.push({
                 uuid,
-                eventId: this.eventTemplates.length,
+                eventId: this.eventRegistration.length,
                 timestamp: Date.now(),
-                kind
+                meta: JSON.parse(meta),
+                template,
+                sockets: JSON.parse(sockets)
             });
-            this.eventTemplates.push(template);
             this.updateNeeded = true;
         } else {
             existingReg.timestamp = Date.now();
@@ -151,19 +151,17 @@ export default class Node implements _Node {
         const now = Date.now();
         this.eventRegistration = this.eventRegistration.filter((reg) => {
             if (now - reg.timestamp > this.announcementTimeout) {
-                this.eventTemplates[reg.eventId] = null;
                 return false;
             }
             return true;
         });
-        this.eventTemplates = this.eventTemplates.filter((t) => t !== null);
 
         // build announcement event
         
         const ks = [];
         for (const ev of this.eventRegistration) {
-            if (!ks.find((k) => k[1] === ev.kind)) {
-                ks.push(["k", ""+ev.kind]);
+            if (ev.meta.king&&!ks.find((k) => k[1] === ev.meta.king)) {
+                ks.push(["k", ""+ev.meta.kind]);
             }
         }
 
@@ -175,13 +173,13 @@ export default class Node implements _Node {
                     name: this.name,
                     picture: this.iconUrl || "",
                     about: this.description,
-                    eventTemplates: this.eventTemplates.map((e) => {
-                        try{
-                            let ev: any = JSON.parse(e);
-                            ev.created_at = "%TIMESTAMP_SECONDS_NUMBER%";
-                            ev.tags = ev.tags.filter((t) => t[0] !== "expiration") as any;
-                            ev.tags.push(["expiration", "%EXPIRATION_TIMESTAMP_SECONDS%"]);
-                            return ev;
+                    tools: this.eventRegistration.map((e) => {
+                        try{                            
+                            return {
+                                template: e.template,
+                                sockets: e.sockets,
+                                meta: e.meta,
+                            };
                         }catch(e){
                             return undefined;
                         }

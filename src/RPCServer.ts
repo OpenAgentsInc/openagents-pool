@@ -196,7 +196,6 @@ class RpcConnector implements IPoolConnector {
         );
         return {
             success: true,
-            node: node,
             refreshInterval: timeout,
         };
     }
@@ -208,10 +207,9 @@ class RpcConnector implements IPoolConnector {
         const nodeId = this.getNodeId(context);
         const node = this.conn.getNode(nodeId);
         if (!node) throw new Error("Node not found");
-        const timeout = node.registerTemplate(request.eventTemplate);
+        const timeout = node.registerTemplate(request.meta, request.template, request.sockets);
         return {
             success: true,
-            node: node,
             refreshInterval: timeout,
         };
     }

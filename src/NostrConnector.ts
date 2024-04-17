@@ -19,6 +19,7 @@ import { JobInput, JobParam } from "openagents-grpc-proto";
 
 import Ws from "ws";
 import Node from "./Node";
+import WebHooks from "./WebHooks";
 useWebSocketImplementation(Ws);
 
 type CustomSubscription = {
@@ -43,6 +44,7 @@ export default class NostrConnector {
     maxJobExecutionTime: number;
     since: number;
     filterProvider: ((provider: string) => boolean) | undefined;
+    webhooks: WebHooks|undefined;
 
     // TODO: support other kinds
     constructor(
@@ -83,6 +85,7 @@ export default class NostrConnector {
                                 if (!job) return;
                                 job.merge(event, this.relays, this.filterProvider);
                                 this.addExtraRelays(job.relays);
+                                this.callWebHooks("Job",job);
                             });
                         } else if (event.kind >= 6000 && event.kind <= 7000) {
                             console.log("Received event", event);
@@ -92,6 +95,7 @@ export default class NostrConnector {
                                 if (!job) return;
                                 job.merge(event, this.relays, this.filterProvider);
                                 this.addExtraRelays(job.relays);
+                                this.callWebHooks("Job",job);
                             });
                         }
                     } catch (e) {
@@ -100,6 +104,16 @@ export default class NostrConnector {
                 },
             }
         );
+    }
+
+    setWebHooks(hooks:WebHooks){
+        this.webhooks=hooks;
+    }
+
+    callWebHooks(object_type:string, obj: any) {
+        if(this.webhooks){
+            this.webhooks.call([object_type, obj]);
+        }
     }
 
     async openCustomSubscription(groupId: string, filters: string[]): Promise<string> {
@@ -127,7 +141,10 @@ export default class NostrConnector {
                 };
                 customSubs.push(customSub);
             }
-            if (event) customSub.events.push(event);
+            if (event) {
+                customSub.events.push(event);
+                this.callWebHooks("Event", event);
+            }
         };
 
         const sub = this.pool.subscribeMany(this.relays, parsedFilters, {
