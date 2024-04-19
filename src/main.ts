@@ -6,6 +6,9 @@ import {  bytesToHex } from '@noble/hashes/utils'
 import WebHooks from "./WebHooks";
 import HyperdrivePool from "./HyperdrivePool";
 async function main(){
+    process.on("uncaughtException", (err) => {
+        console.error("There was an uncaught error", err);
+    });
     const IP = process.env.GRPC_BINDING_ADDRESS || "0.0.0.0";
     const PORT = Number(process.env.GRPC_BINDING_PORT || 5000);
     const DESCRIPTOR_PATH= process.env.GRPC_PROTO_DESCRIPTOR_PATH || "./docs/descriptor.pb";
