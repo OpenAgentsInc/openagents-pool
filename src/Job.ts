@@ -112,6 +112,7 @@ export default class Job implements _Job {
             const nodeId = Utils.getTagVars(event, ["d"])[0][0] || "";
 
             const relays: Array<string> = Utils.getTagVars(event, ["relays"])[0] || defaultRelays;
+            const expectedOutputFormat: string = Utils.getTagVars(event, ["output"])[0][0] || "application/json";
             // const bid = Utils.getTagVars(event, ["bid"], 1)[0];
             // const t = Utils.getTagVars(event, ["t"], 1)[0];
             const description: string =
@@ -162,6 +163,7 @@ export default class Job implements _Job {
             this.description = description;
             this.provider = provider;
             this.relays = [];
+            this.outputFormat = expectedOutputFormat;
             // this.results = {};
             // this.states = {};
             this.input = inputs;

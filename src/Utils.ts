@@ -1,19 +1,47 @@
 import { Event } from "nostr-tools";
 import { uuid as uuidv4 } from "uuidv4";
-import Crypto from "crypto";
+import crypto from "crypto";
 
 export default class Utils {
     static newUUID() {
         return uuidv4();
     }
-    static uuidFrom(v:any):string{
-        if(typeof v=="string"){
-            return Crypto.createHash("sha256").update(v as string).digest("hex");
-        }else{
-            v=JSON.stringify(v);
+
+    static encrypt(v: string, secret: string): string {
+        const key = crypto.createHash("sha256").update(String(secret)).digest();
+        const cipher = crypto.createCipheriv("aes-256-ecb", key, null);
+        return cipher.update(v, "utf8", "hex") + cipher.final("hex");
+    }
+    static decrypt(v: string, secret: string): string {
+        const key = crypto.createHash("sha256").update(String(secret)).digest();
+        const decipher = crypto.createDecipheriv("aes-256-ecb", key, null);
+        let decrypted = decipher.update(v, "hex", "utf8");
+        decrypted += decipher.final("utf8");
+        return decrypted;
+    }
+    static uuidFrom(v: any): string {
+        if (typeof v == "string") {
+            return crypto
+                .createHash("sha256")
+                .update(v as string)
+                .digest("hex");
+        } else {
+            v = JSON.stringify(v);
             return Utils.uuidFrom(v);
         }
     }
+    static secureUuidFrom(v: any): string {
+        if (typeof v == "string") {
+            return crypto
+                .createHash("sha256")
+                .update(v as string)
+                .digest("hex");
+        } else {
+            v = JSON.stringify(v);
+            return Utils.secureUuidFrom(v);
+        }
+    }
+
     static getTagVars(event: Event, tagName: Array<string> | string): Array<Array<string>> {
         const results = new Array<Array<string>>();
         for (const t of event.tags) {
@@ -39,7 +67,7 @@ export default class Utils {
     }
 
     static fixParameterizedJSON(json: string): string {
-        json=json.replace(/(")(%.+_NUMBER%)(")/gim, "$2");
-        return json;     
+        json = json.replace(/(")(%.+_NUMBER%)(")/gim, "$2");
+        return json;
     }
 }

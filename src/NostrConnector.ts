@@ -30,6 +30,12 @@ type CustomSubscription = {
     events: Event[];
 };
 
+type Drive = {
+    url:string,
+    discoveryKey:string,
+    owner: string
+}
+
 export default class NostrConnector {
     relays: Array<string>;
     pool: SimplePool;
@@ -37,14 +43,14 @@ export default class NostrConnector {
     sk: Uint8Array;
     pk: string;
     customSubscriptions: Map<string, Array<CustomSubscription>>;
-    nodes: Array<Node>= [];
+    nodes: Array<Node> = [];
 
     announcementTimeout: number;
     maxEventDuration: number;
     maxJobExecutionTime: number;
     since: number;
     filterProvider: ((provider: string) => boolean) | undefined;
-    webhooks: WebHooks|undefined;
+    webhooks: WebHooks | undefined;
 
     // TODO: support other kinds
     constructor(
@@ -62,7 +68,7 @@ export default class NostrConnector {
         this.pk = getPublicKey(this.sk);
         this.relays = relays;
         this.pool = new SimplePool();
-        this.announcementTimeout=announcementTimeout;
+        this.announcementTimeout = announcementTimeout;
         this.maxEventDuration = maxEventDuration;
         this.maxJobExecutionTime = maxJobExecutionTime;
         this.filterProvider = filterProvider;
@@ -85,7 +91,7 @@ export default class NostrConnector {
                                 if (!job) return;
                                 job.merge(event, this.relays, this.filterProvider);
                                 this.addExtraRelays(job.relays);
-                                this.callWebHooks("Job",job);
+                                this.callWebHooks("Job", job);
                             });
                         } else if (event.kind >= 6000 && event.kind <= 7000) {
                             console.log("Received event", event);
@@ -95,7 +101,7 @@ export default class NostrConnector {
                                 if (!job) return;
                                 job.merge(event, this.relays, this.filterProvider);
                                 this.addExtraRelays(job.relays);
-                                this.callWebHooks("Job",job);
+                                this.callWebHooks("Job", job);
                             });
                         }
                     } catch (e) {
@@ -106,12 +112,12 @@ export default class NostrConnector {
         );
     }
 
-    setWebHooks(hooks:WebHooks){
-        this.webhooks=hooks;
+    setWebHooks(hooks: WebHooks) {
+        this.webhooks = hooks;
     }
 
-    callWebHooks(object_type:string, obj: any) {
-        if(this.webhooks){
+    callWebHooks(object_type: string, obj: any) {
+        if (this.webhooks) {
             this.webhooks.call([object_type, obj]);
         }
     }
@@ -207,15 +213,21 @@ export default class NostrConnector {
             try {
                 console.log("Ensure connection to", relay);
                 await this.pool.ensureRelay(relay);
+                if (this.relays.indexOf(relay) === -1) this.relays.push(relay);
             } catch (e) {
                 console.error("Error connecting to relay", relay, e);
             }
         }
     }
+
     async sendSignedEvent(ev: string | Event) {
         return this.sendEvent(ev, false);
     }
-    async sendEvent(ev: string | Event, sign: boolean = true) {
+
+    async sendEvent(
+        ev: string | Event | UnsignedEvent | EventTemplate,
+        sign: boolean = true
+    ): Promise<Event> {
         let event: VerifiedEvent;
         if (typeof ev === "string") {
             event = JSON.parse(ev);
@@ -231,6 +243,7 @@ export default class NostrConnector {
         }
         console.log("Publishing event\n", event, "\n To", this.relays);
         this.pool.publish(this.relays, event);
+        return event;
     }
 
     async _loop() {
@@ -242,16 +255,16 @@ export default class NostrConnector {
 
         for (const node of this.nodes) {
             try {
-                if(!node.isUpdateNeeded())continue;
-                const events=await node.toEvent(this.sk);
-                console.log("Announce node\n",JSON.stringify(events,null,2),"\n");
-                for (const event of events) this.sendEvent(event);                    
+                if (!node.isUpdateNeeded()) continue;
+                const events = await node.toEvent(this.sk);
+                console.log("Announce node\n", JSON.stringify(events, null, 2), "\n");
+                for (const event of events) this.sendEvent(event);
                 node.clearUpdateNeeded();
             } catch (e) {
                 console.error("Error reannuncing nodes", e);
             }
         }
-    
+
         try {
             this.nodes = this.nodes.filter((node) => !node.isExpired());
         } catch (e) {
@@ -447,7 +460,12 @@ export default class NostrConnector {
         return job;
     }
 
-    async registerNode(id: string, name: string, iconUrl: string, description: string): Promise<[Node,number]> {
+    async registerNode(
+        id: string,
+        name: string,
+        iconUrl: string,
+        description: string
+    ): Promise<[Node, number]> {
         let node = this.nodes.find((node) => node.id == id);
         if (!node) {
             node = new Node(id, name, iconUrl, description, this.announcementTimeout);
@@ -457,9 +475,50 @@ export default class NostrConnector {
         return [node, timeout];
     }
 
-    getNode(id){
+    getNode(id) {
         return this.nodes.find((node) => node.id == id);
     }
 
-   
+    async query(filter: Filter): Promise<Array<Event>> {
+        return this.pool.querySync(this.relays, filter);
+    }
+
+    async findAnnouncedHyperdrives(groupDiscoveryKey: string): Promise<Array<Drive>> {
+        const publicDiscoveryKey = "sp" + Utils.secureUuidFrom(groupDiscoveryKey);
+        // const publicDiscoveryKey = groupDiscoveryKey;
+
+        const filter: Filter = {
+            kinds: [1063],
+            "#x": [publicDiscoveryKey],
+            "#m": ["application/hyperdrive"],
+        };
+        console.log("Filter ", filter);
+        return (await this.query(filter)).map((event) => {
+            const url = Utils.getTagVars(event, ["url"])[0][0];
+            // const discoveryKey = Utils.getTagVars(event, ["x"])[0][0];
+            const nodeId = Utils.getTagVars(event, ["d"])[0][0];
+            const decryptedUrl =  Utils.decrypt(url, groupDiscoveryKey);
+            return { url: decryptedUrl, discoveryKey: groupDiscoveryKey,  owner: nodeId };
+        });
+    }
+
+    async announceHyperdrive(nodeId: string, groupDiscoveryKey: string, driverUrl: string): Promise<string> {
+        const publicDiscoveryKey = "sp" + Utils.secureUuidFrom(groupDiscoveryKey);
+        // const publicDiscoveryKey = groupDiscoveryKey;
+        const encryptedUrl = await Utils.encrypt(driverUrl, groupDiscoveryKey);
+
+        const event: EventTemplate = {
+            kind: 1063,
+            created_at: Math.floor(Date.now() / 1000),
+            tags: [
+                ["x", publicDiscoveryKey],
+                ["m", "application/hyperdrive"],
+                ["url", encryptedUrl],
+                ["d", nodeId],
+            ],
+            content: "",
+        };
+        const submittedEvent = await this.sendEvent(event, true);
+        return submittedEvent.id;
+    }
 }

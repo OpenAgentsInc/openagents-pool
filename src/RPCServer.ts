@@ -4,8 +4,13 @@ import { ReflectionService } from "@grpc/reflection";
 import { loadFileDescriptorSetFromBuffer } from "@grpc/proto-loader";
 import Auth from "./Auth";
 
- 
+ import {
+    Writable,
+    Readable
+ }  from "stream";
 import {
+    RpcInputStream,
+    RpcOutputStream,
   ServerCallContext,
 } from "@protobuf-ts/runtime-rpc";
 
@@ -34,17 +39,161 @@ import {
     RpcJobLog,
     RpcAnnounceNodeResponse,
     JobStatus,
-    IPoolConnector
+    IPoolConnector,
+    RpcCloseDiskRequest,
+    RpcCloseDiskResponse,
+    RpcCreateDiskRequest,
+    RpcCreateDiskResponse,
+    RpcDiskDeleteFileRequest,
+    RpcDiskDeleteFileResponse,
+    RpcDiskListFilesRequest,
+    RpcDiskListFilesResponse,
+    RpcDiskReadFileRequest,
+    RpcDiskReadFileResponse,
+    RpcDiskWriteFileRequest,
+    RpcDiskWriteFileResponse,
+    RpcOpenDiskRequest,
+    RpcOpenDiskResponse
 } from "openagents-grpc-proto";
 import Job  from "./Job";
 import NostrConnector from "./NostrConnector";
 
 import Fs from 'fs';
-
+import HyperdrivePool from "./HyperdrivePool";
+import {DriverOut} from "./HyperdrivePool";
 class RpcConnector implements IPoolConnector {
     conn: NostrConnector;
-    constructor(conn) {
+    hyp: HyperdrivePool;
+    constructor(conn, hyp) {
         this.conn = conn;
+        this.hyp = hyp;
+    }
+
+    async createDisk(
+        request: RpcCreateDiskRequest,
+        context: ServerCallContext
+    ): Promise<RpcCreateDiskResponse> {
+        const nodeId = this.getNodeId(context);
+        const url = await this.hyp.create(
+            nodeId,
+            request.encryptionKey,
+            request.includeEncryptionKeyInUrl,
+            request.name
+        );
+        return {
+            url,
+        };
+    }
+    async openDisk(request: RpcOpenDiskRequest, context: ServerCallContext): Promise<RpcOpenDiskResponse> {
+        const nodeId = this.getNodeId(context);
+        const disk = await this.hyp.open(nodeId, request.url);
+        return {
+            success: true,
+            diskId: disk,
+        };
+    }
+
+    async closeDisk(request: RpcCloseDiskRequest, context: ServerCallContext): Promise<RpcCloseDiskResponse> {
+        const nodeId = this.getNodeId(context);
+        await this.hyp.close(request.diskId);
+        return {
+            success: true,
+        };
+    }
+    async diskDeleteFile(
+        request: RpcDiskDeleteFileRequest,
+        context: ServerCallContext
+    ): Promise<RpcDiskDeleteFileResponse> {
+        const nodeId = this.getNodeId(context);
+        const disk = await this.hyp.get(request.diskId);
+        await disk.del(request.path);
+        return {
+            success: true,
+        };
+    }
+
+    async diskListFiles(
+        request: RpcDiskListFilesRequest,
+        context: ServerCallContext
+    ): Promise<RpcDiskListFilesResponse> {
+        const nodeId = this.getNodeId(context);
+        const disk = await this.hyp.get(request.diskId);
+        const files = await disk.list(request.path);
+        return {
+            files,
+        };
+    }
+
+    async diskReadFile(
+        request: RpcDiskReadFileRequest,
+        responses: RpcInputStream<RpcDiskReadFileResponse>,
+        context: ServerCallContext
+    ): Promise<void> {
+        const nodeId = this.getNodeId(context);
+        const disk = await this.hyp.get(request.diskId);
+        const readStream = await disk.inputStream(request.path);
+        for await (const chunk of readStream) {
+            responses.send({ data: chunk });
+        }
+        await responses.complete();
+    }
+
+    async diskWriteFile(
+        requests: RpcOutputStream<RpcDiskWriteFileRequest>,
+        context: ServerCallContext
+    ): Promise<RpcDiskWriteFileResponse> {
+        try {
+            const nodeId = this.getNodeId(context);
+
+            let diskId: string | undefined;
+            let outputStream: DriverOut | undefined;
+            for await (const request of requests) {
+                try {
+                    if (!diskId) {
+                        diskId = request.diskId;
+                        const disk = await this.hyp.get(diskId);
+                        outputStream = await disk.outputStream(request.path);
+                    } else if (diskId !== request.diskId) {
+                        throw new Error("Cannot write to multiple disks");
+                    }
+                    await outputStream.write(request.data);
+                } catch (e) {
+                    console.error(e);
+                    throw e;
+                }
+            }
+            await outputStream.flushAndWait();
+            return {
+                success: true,
+            };
+        } catch (e) {
+            console.error(e);
+            throw e;
+        }
+    }
+
+    async diskWriteSmallFile(
+        request: RpcDiskWriteFileRequest,
+        context: ServerCallContext
+    ): Promise<RpcDiskWriteFileResponse> {
+        const nodeId = this.getNodeId(context);
+        const disk = await this.hyp.get(request.diskId);
+        await disk.put(request.path, request.data);
+        return {
+            success: true,
+        };
+    }
+
+    async diskReadSmallFile(
+        request: RpcDiskReadFileRequest,
+        context: ServerCallContext
+    ): Promise<RpcDiskReadFileResponse> {
+        const nodeId = this.getNodeId(context);
+        const disk = await this.hyp.get(request.diskId);
+        const data = await disk.get(request.path);
+        return {
+            data,
+        };
     }
 
     getNodeId(context: ServerCallContext): string {
@@ -224,11 +373,13 @@ export default class RPCServer {
     caCrt: Buffer | undefined;
     serverCrt: Buffer | undefined;
     serverKey: Buffer | undefined;
+    hyperdrivePool: HyperdrivePool;
     constructor(
         addr: string,
         port: number,
         descriptorPath: string,
         nostrConnector: NostrConnector,
+        hyperdrivePool: HyperdrivePool,
         caCrt?: Buffer,
         serverCrt?: Buffer,
         serverKey?: Buffer
@@ -240,20 +391,21 @@ export default class RPCServer {
         this.caCrt = caCrt;
         this.serverCrt = serverCrt;
         this.serverKey = serverKey;
+        this.hyperdrivePool = hyperdrivePool;
     }
 
     async start() {
-       
         return new Promise((resolve, reject) => {
             const server = new GRPC.Server({
                 interceptors: [],
             });
 
-           
-            
             server.addService(
                 ...Auth.adaptService(
-                    GPRCBackend.adaptService(PoolConnector, new RpcConnector(this.nostrConnector))
+                    GPRCBackend.adaptService(
+                        PoolConnector,
+                        new RpcConnector(this.nostrConnector, this.hyperdrivePool)
+                    )
                 )
             );
 
