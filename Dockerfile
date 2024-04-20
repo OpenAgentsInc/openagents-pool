@@ -1,14 +1,18 @@
 # Builder
-FROM node:alpine as builder
+FROM node:18 as builder
 
 ADD . /app
 WORKDIR /app
-RUN  apk add --no-cache bash wget python3 py3-pip&& \
+#RUN  apk add --no-cache bash wget python3 py3-pip&& \
+#export NO_CONDA="1" && \
+#npm i && npm run build
+RUN apt update && apt install -y bash wget python3 python3-pip && \
+apt clean && \
 export NO_CONDA="1" && \
 npm i && npm run build
 
 # Runner
-FROM node:alpine
+FROM node:18
 RUN mkdir -p /app
 WORKDIR /app
 COPY --from=builder /app/build /app/build
