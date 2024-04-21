@@ -289,7 +289,7 @@ export default class HyperdrivePool {
     async create(
         owner: string,
         encryptionKey?: string,
-        includeEncryptionKeyInUrl: boolean = false
+        includeEncryptionKeyInUrl: boolean = false,
     ): Promise<string> {
         await this.discovery.flushed();
 
@@ -320,6 +320,10 @@ export default class HyperdrivePool {
     }
 
     async open(owner: string, bundleUrl: string, encryptionKey?: string): Promise<string> {
+        if (!bundleUrl.startsWith("hyperdrive+bundle://")) {
+            bundleUrl = "hyperdrive+bundle://" + bundleUrl;
+        }
+        
         await this.discovery.flushed();
         const bundleData = this.parseHyperUrl(bundleUrl, encryptionKey);
 

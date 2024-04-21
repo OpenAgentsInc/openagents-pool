@@ -1,11 +1,17 @@
 import * as GRPC from "@grpc/grpc-js";
 import Utils from "./Utils";
+import { generateSecretKey, getPublicKey } from "nostr-tools";
 
 export default class Auth {
+
+
     static isAuthorized(methodName: string, nodeId: string): boolean {
         return true;
     }
-    static adaptService(data: [GRPC.ServiceDefinition, GRPC.UntypedServiceImplementation]): [GRPC.ServiceDefinition, GRPC.UntypedServiceImplementation]{
+
+    static adaptService(
+        poolSecretKey: string,
+        data: [GRPC.ServiceDefinition, GRPC.UntypedServiceImplementation]): [GRPC.ServiceDefinition, GRPC.UntypedServiceImplementation]{
         let [def, impl] = data;
 
            impl = Object.fromEntries(

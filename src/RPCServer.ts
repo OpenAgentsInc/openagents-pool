@@ -84,7 +84,7 @@ class RpcConnector implements IPoolConnector {
                 url,
             };
         } catch (e) {
-            console.error(e);
+            console.log(e);
             throw e;
         }
     }
@@ -97,7 +97,7 @@ class RpcConnector implements IPoolConnector {
                 diskId: disk,
             };
         } catch (e) {
-            console.error(e);
+            console.log(e);
             throw e;
         }
     }
@@ -110,7 +110,7 @@ class RpcConnector implements IPoolConnector {
                 success: true,
             };
         } catch (e) {
-            console.error(e);
+            console.log(e);
             throw e;
         }
     }
@@ -126,7 +126,7 @@ class RpcConnector implements IPoolConnector {
                 success: true,
             };
         } catch (e) {
-            console.error(e);
+            console.log(e);
             throw e;
         }
     }
@@ -143,7 +143,7 @@ class RpcConnector implements IPoolConnector {
                 files,
             };
         } catch (e) {
-            console.error(e);
+            console.log(e);
             throw e;
         }
     }
@@ -162,7 +162,7 @@ class RpcConnector implements IPoolConnector {
             }
             await responses.complete();
         } catch (e) {
-            console.error(e);
+            console.log(e);
             throw e;
         }
     }
@@ -187,7 +187,7 @@ class RpcConnector implements IPoolConnector {
                     }
                     await outputStream.write(request.data);
                 } catch (e) {
-                    console.error(e);
+                    console.log(e);
                     throw e;
                 }
             }
@@ -196,7 +196,7 @@ class RpcConnector implements IPoolConnector {
                 success: true,
             };
         } catch (e) {
-            console.error(e);
+            console.log(e);
             throw e;
         }
     }
@@ -213,7 +213,7 @@ class RpcConnector implements IPoolConnector {
                 success: true,
             };
         } catch (e) {
-            console.error(e);
+            console.log(e);
             throw e;
         }
     }
@@ -230,7 +230,7 @@ class RpcConnector implements IPoolConnector {
                 data,
             };
         } catch (e) {
-            console.error(e);
+            console.log(e);
             throw e;
         }
     }
@@ -246,7 +246,7 @@ class RpcConnector implements IPoolConnector {
             const job = await this.conn.getJob(nodeId, id);
             return job;
         } catch (e) {
-            console.error(e);
+            console.log(e);
             throw e;
         }
     }
@@ -273,7 +273,7 @@ class RpcConnector implements IPoolConnector {
             };
             return pendingJobs;
         } catch (e) {
-            console.error(e);
+            console.log(e);
             throw e;
         }
     }
@@ -292,7 +292,7 @@ class RpcConnector implements IPoolConnector {
                 };
             }
         } catch (e) {
-            console.error(e);
+            console.log(e);
             throw e;
         }
     }
@@ -302,7 +302,7 @@ class RpcConnector implements IPoolConnector {
             const nodeId = this.getNodeId(context);
             return this.conn.acceptJob(nodeId, request.jobId);
         } catch (e) {
-            console.error(e);
+            console.log(e);
             throw e;
         }
     }
@@ -312,7 +312,7 @@ class RpcConnector implements IPoolConnector {
             const nodeId = this.getNodeId(context);
             return this.conn.cancelJob(nodeId, request.jobId, request.reason);
         } catch (e) {
-            console.error(e);
+            console.log(e);
             throw e;
         }
     }
@@ -322,7 +322,7 @@ class RpcConnector implements IPoolConnector {
             const nodeId = this.getNodeId(context);
             return this.conn.outputForJob(nodeId, request.jobId, request.output);
         } catch (e) {
-            console.error(e);
+            console.log(e);
             throw e;
         }
     }
@@ -332,7 +332,7 @@ class RpcConnector implements IPoolConnector {
             const nodeId = this.getNodeId(context);
             return this.conn.completeJob(nodeId, request.jobId, request.output);
         } catch (e) {
-            console.error(e);
+            console.log(e);
             throw e;
         }
     }
@@ -342,7 +342,7 @@ class RpcConnector implements IPoolConnector {
             const nodeId = this.getNodeId(context);
             return this.conn.logForJob(nodeId, request.jobId, request.log);
         } catch (e) {
-            console.error(e);
+            console.log(e);
             throw e;
         }
     }
@@ -361,7 +361,7 @@ class RpcConnector implements IPoolConnector {
                 request.outputFormat
             );
         } catch (e) {
-            console.error(e);
+            console.log(e);
             throw e;
         }
     }
@@ -378,7 +378,7 @@ class RpcConnector implements IPoolConnector {
                 success: true,
             } as RpcSendSignedEventResponse;
         } catch (e) {
-            console.error(e);
+            console.log(e);
             throw e;
         }
     }
@@ -395,7 +395,7 @@ class RpcConnector implements IPoolConnector {
                 subscriptionId: subId,
             };
         } catch (e) {
-            console.error(e);
+            console.log(e);
             throw e;
         }
     }
@@ -415,7 +415,7 @@ class RpcConnector implements IPoolConnector {
                 events,
             };
         } catch (e) {
-            console.error(e);
+            console.log(e);
             throw e;
         }
     }
@@ -431,7 +431,7 @@ class RpcConnector implements IPoolConnector {
                 success: true,
             };
         } catch (e) {
-            console.error(e);
+            console.log(e);
             throw e;
         }
     }
@@ -453,7 +453,7 @@ class RpcConnector implements IPoolConnector {
                 refreshInterval: timeout,
             };
         } catch (e) {
-            console.error(e);
+            console.log(e);
             throw e;
         }
     }
@@ -472,7 +472,7 @@ class RpcConnector implements IPoolConnector {
                 refreshInterval: timeout,
             };
         } catch (e) {
-            console.error(e);
+            console.log(e);
             throw e;
         }
     }
@@ -488,7 +488,9 @@ export default class RPCServer {
     serverCrt: Buffer | undefined;
     serverKey: Buffer | undefined;
     hyperdrivePool: HyperdrivePool;
+    poolSecretKey: string;
     constructor(
+        poolSecretKey: string,
         addr: string,
         port: number,
         descriptorPath: string,
@@ -516,6 +518,7 @@ export default class RPCServer {
 
             server.addService(
                 ...Auth.adaptService(
+                    this.poolSecretKey,
                     GPRCBackend.adaptService(
                         PoolConnector,
                         new RpcConnector(this.nostrConnector, this.hyperdrivePool)
@@ -546,7 +549,7 @@ export default class RPCServer {
                 (err: Error | null, port: number) => {
                     if (err) {
                         reject(err);
-                        console.error(`Server error: ${err.message}`);
+                        console.log(`Server error: ${err.message}`);
                     } else {
                         resolve(true);
                         console.log(`Server bound on port: ${port}`);

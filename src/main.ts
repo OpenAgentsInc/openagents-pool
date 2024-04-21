@@ -37,7 +37,17 @@ async function main(){
     const nostr = new NostrConnector(SECRET_KEY, RELAYS, undefined);
     nostr.setWebHooks(webhooks);
     const hyp = new HyperdrivePool(BLOB_STORAGE_PATH, nostr);
-    const server = new RPCServer(IP, PORT, DESCRIPTOR_PATH, nostr, hyp, CA_CRT, SERVER_CRT, SERVER_KEY);
+    const server = new RPCServer(
+        SECRET_KEY, 
+        IP,
+        PORT,
+        DESCRIPTOR_PATH,
+        nostr,
+        hyp,
+        CA_CRT,
+        SERVER_CRT,
+        SERVER_KEY
+    );
     await server.start();
 
 }
