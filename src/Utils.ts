@@ -1,10 +1,22 @@
-import { Event } from "nostr-tools";
+import { Event, nip04 } from "nostr-tools";
 import { uuid as uuidv4 } from "uuidv4";
 import crypto from "crypto";
 
 export default class Utils {
     static newUUID() {
         return uuidv4();
+    }
+
+    static async encryptNostr(
+        text: string,
+        ourPrivateKey: string | Uint8Array,
+        theirPublicKey: string
+    ): Promise<string> {
+        return await nip04.encrypt(ourPrivateKey, theirPublicKey, text);
+    }
+
+    static async decryptNostr(text: string, ourPrivateKey: string, theirPublicKey: string): Promise<string> {
+        return await nip04.decrypt(ourPrivateKey, theirPublicKey, text);
     }
 
     static encrypt(v: string, secret: string): string {

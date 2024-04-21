@@ -38,21 +38,25 @@ export class SharedDrive {
 
 
     async put(path: string, data: string|Uint8Array) {
+        this.lastAccess = Date.now();
         for (const drive of this.drives) {
             if (drive.writable) {
                 await drive.put(path, data);
             }
         }
+
     }
 
     async get(path: string) : Promise<Buffer> {
         // TODO: Pick newer
+        this.lastAccess = Date.now();
         for (const drive of this.drives) {
             if (await drive.exists(path)) {
                 return drive.get(path);
             }
         }
         throw "File not found";
+
     }
 
 
@@ -115,16 +119,17 @@ export class SharedDrive {
     }
 
     async exists(path: string) {
+        this.lastAccess = Date.now();
         for (const drive of this.drives) {
             if (await drive.exists(path)) {
                 return true;
             }
         }
-        this.lastAccess = Date.now();
         return false;
     }
 
     async list(path: string) {
+        this.lastAccess = Date.now();
         const files = [];
         for (const drive of this.drives) {
             for await (const entry of drive.list(path)) {
@@ -132,11 +137,11 @@ export class SharedDrive {
                 if (!files.includes(path)) files.push(path);
             }
         }
-        this.lastAccess = Date.now();
         return files;
     }
 
     async inputStream(path: string): Promise<ReadableGreedy> {
+        this.lastAccess = Date.now();
         let newestEntryInDrive;
         let newestEntryTimestamp = 0;
         for (const drive of this.drives) {
@@ -149,7 +154,6 @@ export class SharedDrive {
             }
         }
         if (!newestEntryInDrive) throw "File not found";
-        this.lastAccess = Date.now();
         const rs = newestEntryInDrive.createReadStream(path);
         rs.readAll = async () => {
             const buffers = [];
@@ -162,6 +166,7 @@ export class SharedDrive {
     }
 
     async del(key: string) {
+        this.lastAccess = Date.now();
         for (const drive of this.drives) {
             if (drive.writable) {
                 await drive.del(key);
@@ -171,6 +176,7 @@ export class SharedDrive {
     }
 
     async close() {
+        this.lastAccess = Date.now();
         for (const drive of this.drives) {
             await drive.close();
         }
@@ -233,15 +239,15 @@ export default class HyperdrivePool {
 
     _cleanup(){
         if(this.isClosed) return;
-        const now = Date.now();
-        for (const key in this.drives) {
-            const sharedDrive = this.drives[key];
-            if (sharedDrive.isClosed || now-sharedDrive.lastAccess>this.driverTimeout) {
-                sharedDrive.close();
-                delete this.drives[key];
-            }
-        }
-        setTimeout(()=>this._cleanup(),1000*60*5);        
+        // const now = Date.now();
+        // for (const key in this.drives) {
+        //     const sharedDrive = this.drives[key];
+        //     if (sharedDrive.isClosed || now-sharedDrive.lastAccess>this.driverTimeout) {
+        //         sharedDrive.close();
+        //         delete this.drives[key];
+        //     }
+        // }
+        // setTimeout(()=>this._cleanup(),1000*60*5);        
     }
 
     createHyperUrl(diskName: string, diskKey: string, encryptionKey?: string) {
