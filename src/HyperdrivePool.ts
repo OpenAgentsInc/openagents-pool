@@ -358,8 +358,13 @@ export default class HyperdrivePool {
             sharedDrive.addDrive(drive, owner);
             this.drives[name] = sharedDrive;
         }
-
-        const drives = await this.conn.findAnnouncedHyperdrives(sharedDrive.groupDiscoveryKey);
+        let drives;
+        while(true){
+            drives = await this.conn.findAnnouncedHyperdrives(sharedDrive.groupDiscoveryKey);
+            if(drives&&drives.length>0) break;
+            await new Promise((resolve) => setTimeout(resolve, 10));
+        }
+        
         console.log("Found", drives);
         let connectedRemoteDrivers = false;
         for (const drive of drives) {

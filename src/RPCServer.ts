@@ -73,55 +73,80 @@ class RpcConnector implements IPoolConnector {
         request: RpcCreateDiskRequest,
         context: ServerCallContext
     ): Promise<RpcCreateDiskResponse> {
-        const nodeId = this.getNodeId(context);
-        const url = await this.hyp.create(
-            nodeId,
-            request.encryptionKey,
-            request.includeEncryptionKeyInUrl,
-            request.name
-        );
-        return {
-            url,
-        };
+        try {
+            const nodeId = this.getNodeId(context);
+            const url = await this.hyp.create(
+                nodeId,
+                request.encryptionKey,
+                request.includeEncryptionKeyInUrl,
+                request.name
+            );
+            return {
+                url,
+            };
+        } catch (e) {
+            console.error(e);
+            throw e;
+        }
     }
     async openDisk(request: RpcOpenDiskRequest, context: ServerCallContext): Promise<RpcOpenDiskResponse> {
-        const nodeId = this.getNodeId(context);
-        const disk = await this.hyp.open(nodeId, request.url);
-        return {
-            success: true,
-            diskId: disk,
-        };
+        try {
+            const nodeId = this.getNodeId(context);
+            const disk = await this.hyp.open(nodeId, request.url);
+            return {
+                success: true,
+                diskId: disk,
+            };
+        } catch (e) {
+            console.error(e);
+            throw e;
+        }
     }
 
     async closeDisk(request: RpcCloseDiskRequest, context: ServerCallContext): Promise<RpcCloseDiskResponse> {
-        const nodeId = this.getNodeId(context);
-        await this.hyp.close(request.diskId);
-        return {
-            success: true,
-        };
+        try {
+            const nodeId = this.getNodeId(context);
+            await this.hyp.close(request.diskId);
+            return {
+                success: true,
+            };
+        } catch (e) {
+            console.error(e);
+            throw e;
+        }
     }
     async diskDeleteFile(
         request: RpcDiskDeleteFileRequest,
         context: ServerCallContext
     ): Promise<RpcDiskDeleteFileResponse> {
-        const nodeId = this.getNodeId(context);
-        const disk = await this.hyp.get(request.diskId);
-        await disk.del(request.path);
-        return {
-            success: true,
-        };
+        try {
+            const nodeId = this.getNodeId(context);
+            const disk = await this.hyp.get(request.diskId);
+            await disk.del(request.path);
+            return {
+                success: true,
+            };
+        } catch (e) {
+            console.error(e);
+            throw e;
+        }
     }
 
     async diskListFiles(
         request: RpcDiskListFilesRequest,
         context: ServerCallContext
     ): Promise<RpcDiskListFilesResponse> {
-        const nodeId = this.getNodeId(context);
-        const disk = await this.hyp.get(request.diskId);
-        const files = await disk.list(request.path);
-        return {
-            files,
-        };
+        try {
+            const nodeId = this.getNodeId(context);
+            const disk = await this.hyp.get(request.diskId);
+            const files = await disk.list(request.path);
+            return {
+                files,
+            };
+        } catch (e) {
+            console.error(e);
+            throw e;
+        }
     }
 
     async diskReadFile(
@@ -129,13 +154,18 @@ class RpcConnector implements IPoolConnector {
         responses: RpcInputStream<RpcDiskReadFileResponse>,
         context: ServerCallContext
     ): Promise<void> {
-        const nodeId = this.getNodeId(context);
-        const disk = await this.hyp.get(request.diskId);
-        const readStream = await disk.inputStream(request.path);
-        for await (const chunk of readStream) {
-            responses.send({ data: chunk });
+        try {
+            const nodeId = this.getNodeId(context);
+            const disk = await this.hyp.get(request.diskId);
+            const readStream = await disk.inputStream(request.path);
+            for await (const chunk of readStream) {
+                responses.send({ data: chunk });
+            }
+            await responses.complete();
+        } catch (e) {
+            console.error(e);
+            throw e;
         }
-        await responses.complete();
     }
 
     async diskWriteFile(
@@ -176,24 +206,34 @@ class RpcConnector implements IPoolConnector {
         request: RpcDiskWriteFileRequest,
         context: ServerCallContext
     ): Promise<RpcDiskWriteFileResponse> {
-        const nodeId = this.getNodeId(context);
-        const disk = await this.hyp.get(request.diskId);
-        await disk.put(request.path, request.data);
-        return {
-            success: true,
-        };
+        try {
+            const nodeId = this.getNodeId(context);
+            const disk = await this.hyp.get(request.diskId);
+            await disk.put(request.path, request.data);
+            return {
+                success: true,
+            };
+        } catch (e) {
+            console.error(e);
+            throw e;
+        }
     }
 
     async diskReadSmallFile(
         request: RpcDiskReadFileRequest,
         context: ServerCallContext
     ): Promise<RpcDiskReadFileResponse> {
-        const nodeId = this.getNodeId(context);
-        const disk = await this.hyp.get(request.diskId);
-        const data = await disk.get(request.path);
-        return {
-            data,
-        };
+        try {
+            const nodeId = this.getNodeId(context);
+            const disk = await this.hyp.get(request.diskId);
+            const data = await disk.get(request.path);
+            return {
+                data,
+            };
+        } catch (e) {
+            console.error(e);
+            throw e;
+        }
     }
 
     getNodeId(context: ServerCallContext): string {
@@ -201,166 +241,241 @@ class RpcConnector implements IPoolConnector {
     }
 
     async getJob(request: RpcGetJob, context: ServerCallContext): Promise<Job> {
-        const nodeId = this.getNodeId(context);
-        const id = request.jobId;
-        const job = await this.conn.getJob(nodeId, id);
-        return job;
+        try {
+            const nodeId = this.getNodeId(context);
+            const id = request.jobId;
+            const job = await this.conn.getJob(nodeId, id);
+            return job;
+        } catch (e) {
+            console.error(e);
+            throw e;
+        }
     }
 
     async getPendingJobs(request: RpcGetPendingJobs, context: ServerCallContext): Promise<PendingJobs> {
-        const nodeId = this.getNodeId(context);
-        const jobIdFilter: RegExp = new RegExp(request.filterById || ".*");
-        const customerFilter: RegExp = new RegExp(request.filterByCustomer || ".*");
-        const runOnFilter: RegExp = new RegExp(request.filterByRunOn || ".*");
-        const descriptionFilter: RegExp = new RegExp(request.filterByDescription || ".*");
-        const kindFilter: RegExp = new RegExp(request.filterByKind || ".*");
-        const jobs = await this.conn.findJobs(
-            nodeId,
-            jobIdFilter,
-            runOnFilter,
-            descriptionFilter,
-            customerFilter,
-            kindFilter,
-            true
-        );
-        const pendingJobs: PendingJobs = {
-            jobs,
-        };
-        return pendingJobs;
+        try {
+            const nodeId = this.getNodeId(context);
+            const jobIdFilter: RegExp = new RegExp(request.filterById || ".*");
+            const customerFilter: RegExp = new RegExp(request.filterByCustomer || ".*");
+            const runOnFilter: RegExp = new RegExp(request.filterByRunOn || ".*");
+            const descriptionFilter: RegExp = new RegExp(request.filterByDescription || ".*");
+            const kindFilter: RegExp = new RegExp(request.filterByKind || ".*");
+            const jobs = await this.conn.findJobs(
+                nodeId,
+                jobIdFilter,
+                runOnFilter,
+                descriptionFilter,
+                customerFilter,
+                kindFilter,
+                true
+            );
+            const pendingJobs: PendingJobs = {
+                jobs,
+            };
+            return pendingJobs;
+        } catch (e) {
+            console.error(e);
+            throw e;
+        }
     }
 
     async isJobDone(request: RpcGetJob, context: ServerCallContext): Promise<RpcIsJobDone> {
-        const nodeId = this.getNodeId(context);
-        const job = await this.getJob(request, context);
-        if (job && job.state.status == JobStatus.SUCCESS) {
-            return {
-                isDone: true,
-            };
-        } else {
-            return {
-                isDone: false,
-            };
+        try {
+            const nodeId = this.getNodeId(context);
+            const job = await this.getJob(request, context);
+            if (job && job.state.status == JobStatus.SUCCESS) {
+                return {
+                    isDone: true,
+                };
+            } else {
+                return {
+                    isDone: false,
+                };
+            }
+        } catch (e) {
+            console.error(e);
+            throw e;
         }
     }
 
     acceptJob(request: RpcAcceptJob, context: ServerCallContext): Promise<Job> {
-        const nodeId = this.getNodeId(context);
-        return this.conn.acceptJob(nodeId, request.jobId);
+        try {
+            const nodeId = this.getNodeId(context);
+            return this.conn.acceptJob(nodeId, request.jobId);
+        } catch (e) {
+            console.error(e);
+            throw e;
+        }
     }
 
     cancelJob(request: RpcCancelJob, context: ServerCallContext): Promise<Job> {
-        const nodeId = this.getNodeId(context);
-        return this.conn.cancelJob(nodeId, request.jobId, request.reason);
+        try {
+            const nodeId = this.getNodeId(context);
+            return this.conn.cancelJob(nodeId, request.jobId, request.reason);
+        } catch (e) {
+            console.error(e);
+            throw e;
+        }
     }
 
     outputForJob(request: RpcJobOutput, context: ServerCallContext): Promise<Job> {
-        const nodeId = this.getNodeId(context);
-        return this.conn.outputForJob(nodeId, request.jobId, request.output);
+        try {
+            const nodeId = this.getNodeId(context);
+            return this.conn.outputForJob(nodeId, request.jobId, request.output);
+        } catch (e) {
+            console.error(e);
+            throw e;
+        }
     }
 
     completeJob(request: RpcJobComplete, context: ServerCallContext): Promise<Job> {
-        const nodeId = this.getNodeId(context);
-        return this.conn.completeJob(nodeId, request.jobId, request.output);
+        try {
+            const nodeId = this.getNodeId(context);
+            return this.conn.completeJob(nodeId, request.jobId, request.output);
+        } catch (e) {
+            console.error(e);
+            throw e;
+        }
     }
 
     logForJob(request: RpcJobLog, context: ServerCallContext): Promise<Job> {
-        const nodeId = this.getNodeId(context);
-        return this.conn.logForJob(nodeId, request.jobId, request.log);
+        try {
+            const nodeId = this.getNodeId(context);
+            return this.conn.logForJob(nodeId, request.jobId, request.log);
+        } catch (e) {
+            console.error(e);
+            throw e;
+        }
     }
 
     requestJob(request: RpcRequestJob, context: ServerCallContext): Promise<Job> {
-        const nodeId = this.getNodeId(context);
-        return this.conn.requestJob(
-            nodeId,
-            request.runOn,
-            request.expireAfter,
-            request.input,
-            request.param,
-            request.description,
-            request.kind,
-            request.outputFormat
-        );
+        try {
+            const nodeId = this.getNodeId(context);
+            return this.conn.requestJob(
+                nodeId,
+                request.runOn,
+                request.expireAfter,
+                request.input,
+                request.param,
+                request.description,
+                request.kind,
+                request.outputFormat
+            );
+        } catch (e) {
+            console.error(e);
+            throw e;
+        }
     }
 
     async sendSignedEvent(
         request: RpcSendSignedEventRequest,
         context: ServerCallContext
     ): Promise<RpcSendSignedEventResponse> {
-        const nodeId = this.getNodeId(context);
-        await this.conn.sendSignedEvent(request.event);
-        return {
-            groupId: request.groupId,
-            success: true,
-        } as RpcSendSignedEventResponse;
+        try {
+            const nodeId = this.getNodeId(context);
+            await this.conn.sendSignedEvent(request.event);
+            return {
+                groupId: request.groupId,
+                success: true,
+            } as RpcSendSignedEventResponse;
+        } catch (e) {
+            console.error(e);
+            throw e;
+        }
     }
 
     async subscribeToEvents(
         request: RpcSubscribeToEventsRequest,
         context: ServerCallContext
     ): Promise<RpcSubscribeToEventsResponse> {
-        const nodeId = this.getNodeId(context);
-        const subId = await this.conn.openCustomSubscription(request.groupId, request.filters);
-        return {
-            groupId: request.groupId,
-            subscriptionId: subId,
-        };
+        try {
+            const nodeId = this.getNodeId(context);
+            const subId = await this.conn.openCustomSubscription(request.groupId, request.filters);
+            return {
+                groupId: request.groupId,
+                subscriptionId: subId,
+            };
+        } catch (e) {
+            console.error(e);
+            throw e;
+        }
     }
 
     async getEvents(request: RpcGetEventsRequest, context: ServerCallContext): Promise<RpcGetEventsResponse> {
-        const nodeId = this.getNodeId(context);
-        const events: string[] = await this.conn.getAndConsumeCustomEvents(
-            request.groupId,
-            request.subscriptionId,
-            request.limit
-        );
-        return {
-            groupId: request.groupId,
-            subscriptionId: request.subscriptionId,
-            count: events.length,
-            events,
-        };
+        try{
+            const nodeId = this.getNodeId(context);
+            const events: string[] = await this.conn.getAndConsumeCustomEvents(
+                request.groupId,
+                request.subscriptionId,
+                request.limit
+            );
+            return {
+                groupId: request.groupId,
+                subscriptionId: request.subscriptionId,
+                count: events.length,
+                events,
+            };
+        } catch (e) {
+            console.error(e);
+            throw e;
+        }
     }
 
     async unsubscribeFromEvents(
         request: RpcUnsubscribeFromEventsRequest,
         context: ServerCallContext
     ): Promise<RpcUnsubscribeFromEventsResponse> {
-        const nodeId = this.getNodeId(context);
-        await this.conn.closeCustomSubscription(request.groupId, request.subscriptionId);
-        return {
-            success: true,
-        };
+        try {
+            const nodeId = this.getNodeId(context);
+            await this.conn.closeCustomSubscription(request.groupId, request.subscriptionId);
+            return {
+                success: true,
+            };
+        } catch (e) {
+            console.error(e);
+            throw e;
+        }
     }
 
     async announceNode(
         request: RpcAnnounceNodeRequest,
         context: ServerCallContext
     ): Promise<RpcAnnounceNodeResponse> {
-        const nodeId = this.getNodeId(context);
-        const [node, timeout] = await this.conn.registerNode(
-            nodeId,
-            request.name,
-            request.iconUrl,
-            request.description
-        );
-        return {
-            success: true,
-            refreshInterval: timeout,
-        };
+        try {
+            const nodeId = this.getNodeId(context);
+            const [node, timeout] = await this.conn.registerNode(
+                nodeId,
+                request.name,
+                request.iconUrl,
+                request.description
+            );
+            return {
+                success: true,
+                refreshInterval: timeout,
+            };
+        } catch (e) {
+            console.error(e);
+            throw e;
+        }
     }
 
     async announceEventTemplate(
         request: RpcAnnounceTemplateRequest,
         context: ServerCallContext
     ): Promise<RpcAnnounceTemplateResponse> {
-        const nodeId = this.getNodeId(context);
-        const node = this.conn.getNode(nodeId);
-        if (!node) throw new Error("Node not found");
-        const timeout = node.registerTemplate(request.meta, request.template, request.sockets);
-        return {
-            success: true,
-            refreshInterval: timeout,
-        };
+        try {
+            const nodeId = this.getNodeId(context);
+            const node = this.conn.getNode(nodeId);
+            if (!node) throw new Error("Node not found");
+            const timeout = node.registerTemplate(request.meta, request.template, request.sockets);
+            return {
+                success: true,
+                refreshInterval: timeout,
+            };
+        } catch (e) {
+            console.error(e);
+            throw e;
+        }
     }
 }
 
