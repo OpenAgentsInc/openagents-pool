@@ -78,8 +78,7 @@ class RpcConnector implements IPoolConnector {
             const url = await this.hyp.create(
                 nodeId,
                 request.encryptionKey,
-                request.includeEncryptionKeyInUrl,
-                request.name
+                request.includeEncryptionKeyInUrl
             );
             return {
                 url,
@@ -106,7 +105,7 @@ class RpcConnector implements IPoolConnector {
     async closeDisk(request: RpcCloseDiskRequest, context: ServerCallContext): Promise<RpcCloseDiskResponse> {
         try {
             const nodeId = this.getNodeId(context);
-            await this.hyp.close(request.diskId);
+            await this.hyp.commit(request.diskId);
             return {
                 success: true,
             };
@@ -121,7 +120,7 @@ class RpcConnector implements IPoolConnector {
     ): Promise<RpcDiskDeleteFileResponse> {
         try {
             const nodeId = this.getNodeId(context);
-            const disk = await this.hyp.get(request.diskId);
+            const disk = await this.hyp.get(nodeId, request.diskId);
             await disk.del(request.path);
             return {
                 success: true,
@@ -138,7 +137,7 @@ class RpcConnector implements IPoolConnector {
     ): Promise<RpcDiskListFilesResponse> {
         try {
             const nodeId = this.getNodeId(context);
-            const disk = await this.hyp.get(request.diskId);
+            const disk = await this.hyp.get(nodeId, request.diskId);
             const files = await disk.list(request.path);
             return {
                 files,
@@ -156,7 +155,7 @@ class RpcConnector implements IPoolConnector {
     ): Promise<void> {
         try {
             const nodeId = this.getNodeId(context);
-            const disk = await this.hyp.get(request.diskId);
+            const disk = await this.hyp.get(nodeId, request.diskId);
             const readStream = await disk.inputStream(request.path);
             for await (const chunk of readStream) {
                 responses.send({ data: chunk });
@@ -181,7 +180,7 @@ class RpcConnector implements IPoolConnector {
                 try {
                     if (!diskId) {
                         diskId = request.diskId;
-                        const disk = await this.hyp.get(diskId);
+                        const disk = await this.hyp.get(nodeId, diskId);
                         outputStream = await disk.outputStream(request.path);
                     } else if (diskId !== request.diskId) {
                         throw new Error("Cannot write to multiple disks");
@@ -208,7 +207,7 @@ class RpcConnector implements IPoolConnector {
     ): Promise<RpcDiskWriteFileResponse> {
         try {
             const nodeId = this.getNodeId(context);
-            const disk = await this.hyp.get(request.diskId);
+            const disk = await this.hyp.get(nodeId, request.diskId);
             await disk.put(request.path, request.data);
             return {
                 success: true,
@@ -225,7 +224,7 @@ class RpcConnector implements IPoolConnector {
     ): Promise<RpcDiskReadFileResponse> {
         try {
             const nodeId = this.getNodeId(context);
-            const disk = await this.hyp.get(request.diskId);
+            const disk = await this.hyp.get(nodeId, request.diskId);
             const data = await disk.get(request.path);
             return {
                 data,

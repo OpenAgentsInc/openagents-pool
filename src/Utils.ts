@@ -1,6 +1,7 @@
-import { Event, nip04 } from "nostr-tools";
+import { Event, nip04, getPublicKey } from "nostr-tools";
 import { uuid as uuidv4 } from "uuidv4";
 import crypto from "crypto";
+import { hexToBytes, bytesToHex } from "@noble/hashes/utils";
 
 export default class Utils {
     static newUUID() {
@@ -17,6 +18,64 @@ export default class Utils {
 
     static async decryptNostr(text: string, ourPrivateKey: string, theirPublicKey: string): Promise<string> {
         return await nip04.decrypt(ourPrivateKey, theirPublicKey, text);
+    }
+
+    static async getHyperdriveDiscoveryKey(secret:string|Uint8Array):Promise<string> {
+        if (typeof secret == "string") {
+            if (secret.startsWith("hyperdrive+bundle://")) {
+                secret= secret.replace("hyperdrive+bundle://", "");
+            }
+            secret = hexToBytes(secret);
+        }
+        return getPublicKey(secret);
+    }
+
+    static async encryptHyperdrive(url: string, secretKey: string | Uint8Array):Promise<{
+        bundleUrl: string,
+        discoveryHash: string,
+        encryptedUrl: string,
+    }> {
+        if (!url.startsWith("hyperdrive://")) {
+            throw new Error("Invalid hyperdrive url");
+        }
+        if (typeof secretKey == "string") {
+            if (secretKey.startsWith("hyperdrive+bundle://")) {
+                secretKey= secretKey.replace("hyperdrive+bundle://", "");
+            }
+            if(secretKey.includes("?")){
+                secretKey = secretKey.split("?")[0];
+            }
+            if(secretKey.includes("#")){
+                secretKey = secretKey.split("#")[0];
+            }
+            secretKey = hexToBytes(secretKey);
+        }
+        const publicKey = getPublicKey(secretKey);
+        const encryptedUrl = await nip04.encrypt(secretKey, publicKey, url);
+        const discoveryHash = publicKey;
+        const bundleUrl = "hyperdrive+bundle://" + bytesToHex(secretKey);
+
+        return {
+            bundleUrl : bundleUrl,
+            discoveryHash: discoveryHash,
+            encryptedUrl: encryptedUrl,
+        };
+    }
+
+    static async decryptHyperdrive(bundleUrl: string, encryptedUrl: string): Promise<string> {
+        if (!bundleUrl.startsWith("hyperdrive+bundle://")) {
+            throw new Error("Invalid hyperdrive bundle url");
+        }
+        bundleUrl=bundleUrl.replace("hyperdrive+bundle://", "");
+        if(bundleUrl.includes("?")){
+            bundleUrl = bundleUrl.split("?")[0];
+        }
+        if(bundleUrl.includes("#")){
+            bundleUrl = bundleUrl.split("#")[0];
+        }
+        const secretKey = hexToBytes(bundleUrl);
+        const publicKey = getPublicKey(secretKey);
+        return await nip04.decrypt(secretKey, publicKey, encryptedUrl);
     }
 
     static encrypt(v: string, secret: string): string {

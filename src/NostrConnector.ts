@@ -483,38 +483,53 @@ export default class NostrConnector {
         return this.pool.querySync(this.relays, filter);
     }
 
-    async findAnnouncedHyperdrives(groupDiscoveryKey: string): Promise<Array<Drive>> {
-        const publicDiscoveryKey = "sp" + Utils.secureUuidFrom(groupDiscoveryKey);
-        // const publicDiscoveryKey = groupDiscoveryKey;
-
+    async findAnnouncedHyperdrives(bundleUrl: string): Promise<Array<Drive>> {
+        const discoveryKey = await Utils.getHyperdriveDiscoveryKey(bundleUrl);
         const filter: Filter = {
             kinds: [1063],
-            "#x": [publicDiscoveryKey],
-            "#m": ["application/hyperdrive"],
+            "#x": [discoveryKey],
+            "#m": ["application/hyperdrive+bundle"],
         };
         console.log("Filter ", filter);
-        return (await this.query(filter)).map((event) => {
+        return await Promise.all((await this.query(filter)).map(async (event) => {
             const url = Utils.getTagVars(event, ["url"])[0][0];
-            // const discoveryKey = Utils.getTagVars(event, ["x"])[0][0];
             const nodeId = Utils.getTagVars(event, ["d"])[0][0];
-            const decryptedUrl =  Utils.decrypt(url, groupDiscoveryKey);
-            return { url: decryptedUrl, discoveryKey: groupDiscoveryKey,  owner: nodeId };
-        });
+            const decryptedUrl = await Utils.decryptHyperdrive(bundleUrl,url);
+            const version = Utils.getTagVars(event, ["v"])[0][0];
+            return { url: decryptedUrl, discoveryKey: discoveryKey, owner: nodeId , version: version};
+        }));
     }
 
-    async announceHyperdrive(nodeId: string, groupDiscoveryKey: string, driverUrl: string): Promise<string> {
-        const publicDiscoveryKey = "sp" + Utils.secureUuidFrom(groupDiscoveryKey);
-        // const publicDiscoveryKey = groupDiscoveryKey;
-        const encryptedUrl = await Utils.encrypt(driverUrl, groupDiscoveryKey);
+    async unannounceHyperdrive( bundleUrl: string): Promise<void> {
+        const discoveryHash = await Utils.getHyperdriveDiscoveryKey(bundleUrl);
+        const filter: Filter = {
+            kinds: [1063],
+            "#x": [discoveryHash],
+            "#m": ["application/hyperdrive+bundle"]
+        };
+        const events = await this.query(filter);
+        await this.sendEvent({
+            kind: 5,
+            created_at: Math.floor(Date.now() / 1000),
+            tags: [
+                ...events.map((event) => ["e", event.id]),
+            ],
+            content: "Driver closed"
+        }, true);
 
+    }
+
+    async announceHyperdrive(nodeId: string, bundleUrl: string, driverUrl: string, version: string|number): Promise<string> {
+        const encryptedData = await Utils.encryptHyperdrive(driverUrl, bundleUrl);
         const event: EventTemplate = {
             kind: 1063,
             created_at: Math.floor(Date.now() / 1000),
             tags: [
-                ["x", publicDiscoveryKey],
-                ["m", "application/hyperdrive"],
-                ["url", encryptedUrl],
+                ["x", encryptedData.discoveryHash],
+                ["m", "application/hyperdrive+bundle"],
+                ["url", encryptedData.encryptedUrl],
                 ["d", nodeId],
+                ["v", ""+version]
             ],
             content: "",
         };

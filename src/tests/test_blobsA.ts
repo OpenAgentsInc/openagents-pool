@@ -24,8 +24,8 @@ async function h1() {
     const driveBId = await hyperpool.open("test2",url);
 
     console.log("Get drivers");
-    const driveA = await hyperpool.get(driveAId);
-    const driveB=await hyperpool.get(driveBId);
+    const driveA = await hyperpool.get("test",driveAId);
+    const driveB = await hyperpool.get("test", driveBId);
 
     // await driveA.put("/test2.txt","Hello World");
     
@@ -47,6 +47,10 @@ async function h1() {
             .readAll())
             .toString()
     );
+
+    await driveA.commit();
+    await driveB.commit();
+
     return url;
 
 }
