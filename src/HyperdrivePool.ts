@@ -10,7 +10,8 @@ import Crypto from "crypto";
 import { Writable, Readable, PassThrough } from "stream";
 import Utils from "./Utils";
 import { generateSecretKey } from "nostr-tools";
-
+import Fs from "fs";
+import Path from "path";
 import { hexToBytes, bytesToHex } from "@noble/hashes/utils";
 export type DriverOut = {
     flushAndWait:()=>Promise<void>
@@ -190,7 +191,10 @@ export class SharedDrive {
     async commit() {
         this.lastAccess = Date.now();
         for(const drive of this.drives) {
-            if (!drive._instanceLocal) continue;
+            if (!drive._instanceLocal) {
+                console.log("Skip commit of remote drive", drive.key.toString("hex"));
+                continue;
+            }
             const version = drive.version;
             const diskUrl = "hyperdrive://" + drive.key.toString("hex");
             console.log("Commit local clone", diskUrl);
@@ -214,6 +218,7 @@ export default class HyperdrivePool {
     nPeers: number = 0;
     driverTimeout: number = 1000 * 60 * 60 * 1; // 1 hour
     isClosed: boolean = false;
+    createdNow: string[] = []
     constructor(storagePath: string, conn: NostrConnector, topic: string = "OpenAgentsBlobStore") {
         this.store = new Corestore(storagePath, {
             secretKey: conn.sk,
@@ -300,7 +305,8 @@ export default class HyperdrivePool {
                 ? `?encryptionKey=${encodeURIComponent(encryptionKey)}`
                 : "");
 
-        const corestore = this.store.namespace(bundleUrl.replace(/[^a-zA-Z0-9]/g, "_"));
+        const bundleNamespace = bundleUrl.replace(/[^a-zA-Z0-9]/g, "_");
+        const corestore = this.store.namespace(bundleNamespace);
 
         const drive = new Hyperdrive(corestore, {
             encryptionKey: encryptionKey ? b4a.from(encryptionKey, "hex") : undefined,
@@ -310,12 +316,12 @@ export default class HyperdrivePool {
 
 
         this.drives[bundleUrl] = new SharedDrive(bundleUrl, this.conn);
-        this.drives[bundleUrl].addDrive(drive, owner);
+        this.drives[bundleUrl].addDrive(drive, owner, true);
 
         // const diskUrl = "hyperdrive://" + drive.key.toString("hex");
         // console.log("Announce driver", diskUrl);
         // await this.conn.announceHyperdrive(owner, bundleUrl, diskUrl);
-
+        // await Fs.promises.writeFile(Path.join(this.storagePath, bundleNamespace + ".lstatep"), "true");
         return bundleUrl;
     }
 
@@ -330,6 +336,7 @@ export default class HyperdrivePool {
         const corestore = this.store.namespace(bundleUrl.replace(/[^a-zA-Z0-9]/g, "_"));
         let sharedDrive = this.drives[bundleUrl];
         if (!sharedDrive) {
+            console.log("Create local disk", bundleUrl);
             const drive = new Hyperdrive(corestore, {
                 encryptionKey: bundleData.encryptionKey
                     ? b4a.from(bundleData.encryptionKey, "hex")
@@ -343,13 +350,15 @@ export default class HyperdrivePool {
         }
 
         let drives;
+        
         // while (true) {
             drives = await this.conn.findAnnouncedHyperdrives(bundleUrl);
-            // if (drives && drives.length > 0) break;
-            // await new Promise((resolve) => setTimeout(resolve, 10));
+        //     if (drives && drives.length > 0) break;
+        //     console.log("Waiting for remote drivers...");
+        //     await new Promise((resolve) => setTimeout(resolve, 10));
         // }
 
-        console.log("Found", drives);
+        console.log("Found", drives, "remote disks");
         let connectedRemoteDrivers = false;
         for (const drive of drives) {
             const driverData = this.parseHyperUrl(drive.url, bundleData.encryptionKey);
@@ -364,9 +373,9 @@ export default class HyperdrivePool {
                 await hd.ready();
                 sharedDrive.addDrive(hd, drive.owner);
                 connectedRemoteDrivers = true;
-                console.log("Connected to remote driver", drive.url);
+                console.log("Connected to remote disk", drive.url);
             } else {
-                console.log("Already connected to remote driver", drive.url);
+                console.log("Already connected to remote disk", drive.url);
             }
         }
 
