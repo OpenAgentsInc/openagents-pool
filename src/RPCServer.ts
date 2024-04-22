@@ -611,13 +611,13 @@ export default class RPCServer {
             }
             server.bindAsync(
                 `${this.addr}:${this.port}`,
-                this.caCrt && this.serverCrt && this.serverKey
+                this.caCrt || this.serverCrt || this.serverKey
                     ? GRPC.ServerCredentials.createSsl(
-                          this.caCrt,
+                          this.caCrt||null,
                           [
                               {
-                                  private_key: this.serverKey,
-                                  cert_chain: this.serverCrt,
+                                  private_key: this.serverKey||null,
+                                  cert_chain: this.serverCrt||null,
                               },
                           ],
                           false
