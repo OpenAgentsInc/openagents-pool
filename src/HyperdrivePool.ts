@@ -42,6 +42,16 @@ export class SharedDrive {
     }
 
 
+    getVersion(): number {
+        let version = 0;
+        for (const drive of this.drives) {
+            if (drive.version > version) {
+                version = drive.version;
+            }
+        }
+        return version;
+    }
+
     async put(path: string, data: string|Uint8Array) {
         this.lastAccess = Date.now();
         for (const drive of this.drives) {
@@ -325,7 +335,7 @@ export default class HyperdrivePool {
         return bundleUrl;
     }
 
-    async open(owner: string, bundleUrl: string, encryptionKey?: string): Promise<string> {
+    async open(owner: string, bundleUrl: string, encryptionKey?: string): Promise<[string,number]> {
         if (!bundleUrl.startsWith("hyperdrive+bundle://")) {
             bundleUrl = "hyperdrive+bundle://" + bundleUrl;
         }
@@ -396,13 +406,13 @@ export default class HyperdrivePool {
             }
         }
         sharedDrive.lastAccess = Date.now();
-        return bundleUrl;
+        return [bundleUrl,await sharedDrive.getVersion()];
     }
 
     async get(owner: string, bundleUrl: string): Promise<SharedDrive> {
         let sharedDriver = this.drives[bundleUrl];
         if(!sharedDriver) {
-            bundleUrl = await this.open(owner, bundleUrl);
+            bundleUrl = (await this.open(owner, bundleUrl))[0];
             sharedDriver = this.drives[bundleUrl];
         }
         sharedDriver.lastAccess = Date.now();

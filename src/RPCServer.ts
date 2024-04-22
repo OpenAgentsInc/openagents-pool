@@ -91,7 +91,7 @@ class RpcConnector implements IPoolConnector {
     async openDisk(request: RpcOpenDiskRequest, context: ServerCallContext): Promise<RpcOpenDiskResponse> {
         try {
             const nodeId = this.getNodeId(context);
-            const disk = await this.hyp.open(nodeId, request.url);
+            const [disk,version] = await this.hyp.open(nodeId, request.url);
             return {
                 success: true,
                 diskId: disk,

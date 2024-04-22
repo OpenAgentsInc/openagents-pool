@@ -18,10 +18,10 @@ async function h1() {
     const url = await hyperpool.create("test");
     
     console.log("Open driver in A");
-    const driveAId = await hyperpool.open("test",url);
+    const driveAId = (await hyperpool.open("test",url))[0];
 
     console.log("Open driver in B");
-    const driveBId = await hyperpool.open("test2",url);
+    const driveBId = (await hyperpool.open("test2",url))[0];
 
     console.log("Get drivers");
     const driveA = await hyperpool.get("test",driveAId);

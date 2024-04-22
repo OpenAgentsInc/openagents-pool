@@ -15,7 +15,7 @@ async function h2(url:string){
 
     const nostr = new NostrConnector(SECRET_KEY, RELAYS, undefined);
     const hyperpool = new HyperdrivePool("./tmp/hyperpool3", nostr);
-    const driveCId = await hyperpool.open("test",url);
+    const driveCId = (await hyperpool.open("test",url))[0];
     const driveC = await hyperpool.get("test", driveCId);
 
     console.log("List driver C");
