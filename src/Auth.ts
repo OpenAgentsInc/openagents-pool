@@ -1,7 +1,6 @@
 import * as GRPC from "@grpc/grpc-js";
 import Utils from "./Utils";
 import { generateSecretKey, getPublicKey } from "nostr-tools";
-
 export default class Auth {
 
 
@@ -22,6 +21,7 @@ export default class Auth {
                        const token: string = metadata["authorization"] || Utils.uuidFrom(call.getPeer());
                        const id = Utils.uuidFrom(token);
                        call.metadata.set("nodeid", id);
+                        call.metadata.set("cacheid", id);
                        if (this.isAuthorized(methodName, id)) {
                            methodImplementation(call, callback);
                        } else {

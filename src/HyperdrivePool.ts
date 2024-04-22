@@ -12,19 +12,22 @@ import Utils from "./Utils";
 import { generateSecretKey } from "nostr-tools";
 import Fs from "fs";
 import Path from "path";
+import { EventEmitter } from "events";
+
 import { hexToBytes, bytesToHex } from "@noble/hashes/utils";
 export type DriverOut = {
     flushAndWait:()=>Promise<void>
     write:(data:Buffer|string|Uint8Array)=>void
 };
 export type ReadableGreedy = Readable & {readAll:()=>Promise<Buffer>};
-export class SharedDrive {
+export class SharedDrive extends EventEmitter {
     drives: Hyperdrive[] = [];
     bundleUrl: string;
     lastAccess: number;
     isClosed: boolean = false;
     conn: NostrConnector;
     constructor(bundleUrl: string, conn: NostrConnector) {
+        super();
         this.bundleUrl = bundleUrl;
         this.lastAccess = Date.now();
         this.conn = conn;
@@ -41,7 +44,6 @@ export class SharedDrive {
         return this.drives.some((drive) => drive.key.toString("hex") === key);
     }
 
-
     getVersion(): number {
         let version = 0;
         for (const drive of this.drives) {
@@ -52,36 +54,47 @@ export class SharedDrive {
         return version;
     }
 
-    async put(path: string, data: string|Uint8Array) {
+    async put(path: string, data: string | Uint8Array) {
+        if (!path.startsWith("/")) {
+            path = "/" + path;
+        }
         this.lastAccess = Date.now();
+        let atLeastOneDrive = false;
         for (const drive of this.drives) {
             if (drive.writable) {
                 await drive.put(path, data);
+                atLeastOneDrive = true;
             }
         }
-
+        if (!atLeastOneDrive) throw "No writable drives";
     }
 
-    async get(path: string) : Promise<Buffer> {
+    async get(path: string): Promise<Buffer> {
+        if (!path.startsWith("/")) path = "/" + path;
         // TODO: Pick newer
         this.lastAccess = Date.now();
+        let data = undefined;
         for (const drive of this.drives) {
             if (await drive.exists(path)) {
-                return drive.get(path);
+                console.log("Found file ",path," in drive", drive.key.toString("hex"));
+                data = drive.get(path);
             }
         }
+        if (data) return data;
+
         throw "File not found";
-
     }
-
 
     async outputStream(path: string): Promise<DriverOut> {
         const streams = [];
+        let atLeastOneDrive = false;
         for (const drive of this.drives) {
             if (drive.writable) {
                 streams.push(drive.createWriteStream(path));
+                atLeastOneDrive = true;
             }
         }
+        if (!atLeastOneDrive) throw "No writable drives";
         this.lastAccess = Date.now();
         // const pt = new PassThrough() as any;
         // pt.on("error", (e) => console.log(`Error in outputStream: ${e}`));
@@ -112,6 +125,7 @@ export class SharedDrive {
         const pt: DriverOut = {
             flushAndWait: async () => {
                 let endedStreams = 0;
+
                 for (const stream of streams) {
                     stream.end();
                     stream.on("close", () => {
@@ -128,22 +142,24 @@ export class SharedDrive {
                 }
             },
         };
-        
 
         return pt;
     }
 
     async exists(path: string) {
+        if (!path.startsWith("/")) path = "/" + path;
         this.lastAccess = Date.now();
+        // let f=await this.list(path);
+        // return f.length>0;
         for (const drive of this.drives) {
-            if (await drive.exists(path)) {
-                return true;
-            }
+            if (await drive.exists(path)) return true;
         }
+        console.log("File not found", path);
         return false;
     }
 
-    async list(path: string) {
+    async list(path: string = "/") {
+        if (!path.startsWith("/")) path = "/" + path;
         this.lastAccess = Date.now();
         const files = [];
         for (const drive of this.drives) {
@@ -190,8 +206,13 @@ export class SharedDrive {
         this.lastAccess = Date.now();
     }
 
-    async close(){
-        await this.conn.unannounceHyperdrive( this.bundleUrl);
+    async close() {
+        this.emit("close");
+        try {
+            await this.conn.unannounceHyperdrive(this.bundleUrl);
+        } catch (e) {
+            console.log("Error unannouncing", e);
+        }
         for (const drive of this.drives) {
             await drive.close();
         }
@@ -200,7 +221,7 @@ export class SharedDrive {
 
     async commit() {
         this.lastAccess = Date.now();
-        for(const drive of this.drives) {
+        for (const drive of this.drives) {
             if (!drive._instanceLocal) {
                 console.log("Skip commit of remote drive", drive.key.toString("hex"));
                 continue;
@@ -228,7 +249,6 @@ export default class HyperdrivePool {
     nPeers: number = 0;
     driverTimeout: number = 1000 * 60 * 60 * 1; // 1 hour
     isClosed: boolean = false;
-    createdNow: string[] = []
     constructor(storagePath: string, conn: NostrConnector, topic: string = "OpenAgentsBlobStore") {
         this.store = new Corestore(storagePath, {
             secretKey: conn.sk,

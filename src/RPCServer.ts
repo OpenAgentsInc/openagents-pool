@@ -53,20 +53,28 @@ import {
     RpcDiskWriteFileRequest,
     RpcDiskWriteFileResponse,
     RpcOpenDiskRequest,
-    RpcOpenDiskResponse
+    RpcOpenDiskResponse,
+    RpcCacheGetRequest,
+    RpcCacheGetResponse,
+    RpcCacheSetRequest,
+    RpcCacheSetResponse
 } from "openagents-grpc-proto";
 import Job  from "./Job";
 import NostrConnector from "./NostrConnector";
 
 import Fs from 'fs';
-import HyperdrivePool from "./HyperdrivePool";
+import HyperdrivePool, { SharedDrive } from "./HyperdrivePool";
 import {DriverOut} from "./HyperdrivePool";
+import Cache, { CacheDisk } from "./Cache";
+
 class RpcConnector implements IPoolConnector {
     conn: NostrConnector;
     hyp: HyperdrivePool;
-    constructor(conn, hyp) {
+    cache: Cache;
+    constructor(conn, hyp, cache) {
         this.conn = conn;
         this.hyp = hyp;
+        this.cache = cache;
     }
 
     async createDisk(
@@ -91,10 +99,11 @@ class RpcConnector implements IPoolConnector {
     async openDisk(request: RpcOpenDiskRequest, context: ServerCallContext): Promise<RpcOpenDiskResponse> {
         try {
             const nodeId = this.getNodeId(context);
-            const [disk,version] = await this.hyp.open(nodeId, request.url);
+            const [disk, version] = await this.hyp.open(nodeId, request.url);
             return {
                 success: true,
                 diskId: disk,
+                version: version,
             };
         } catch (e) {
             console.log(e);
@@ -114,6 +123,7 @@ class RpcConnector implements IPoolConnector {
             throw e;
         }
     }
+
     async diskDeleteFile(
         request: RpcDiskDeleteFileRequest,
         context: ServerCallContext
@@ -158,7 +168,7 @@ class RpcConnector implements IPoolConnector {
             const disk = await this.hyp.get(nodeId, request.diskId);
             const readStream = await disk.inputStream(request.path);
             for await (const chunk of readStream) {
-                responses.send({ data: chunk });
+                responses.send({ data: chunk, exists: true });
             }
             await responses.complete();
         } catch (e) {
@@ -201,6 +211,63 @@ class RpcConnector implements IPoolConnector {
         }
     }
 
+    async cacheSet(
+        requests: RpcOutputStream<RpcCacheSetRequest>,
+        context: ServerCallContext
+    ): Promise<RpcCacheSetResponse> {
+        try {
+            const nodeId = this.getNodeId(context);
+            const cache = await this.getCache(context);
+            let outputStream: DriverOut | undefined;
+            for await (const request of requests) {
+                try {
+                    if (!outputStream) {
+                        outputStream = await cache.setAsStream(
+                            request.key,
+                            request.version,
+                            request.expireAt || 0
+                        );
+                    }
+                    await outputStream.write(request.data);
+                } catch (e) {
+                    console.log(e);
+                    throw e;
+                }
+            }
+            await outputStream.flushAndWait();
+            return {
+                success: true,
+            };
+        } catch (e) {
+            console.log(e);
+            throw e;
+        }
+    }
+
+    async cacheGet(
+        request: RpcCacheGetRequest,
+        responses: RpcInputStream<RpcCacheGetResponse>,
+        context: ServerCallContext
+    ): Promise<void> {
+        try {
+            const nodeId = this.getNodeId(context);
+            const cache = await this.getCache(context);
+            const readStream = await cache.getAsStream(request.key, request.lastVersion);
+            if (!readStream) {
+                await responses.send({ data: Buffer.from([]), exists: false });
+                await responses.complete();
+            } else {
+                for await (const chunk of readStream) {
+                    await responses.send({ data: chunk, exists: true });
+                }
+                await responses.complete();
+            }
+        } catch (e) {
+            console.log(e);
+            throw e;
+        }
+    }
+
     async diskWriteSmallFile(
         request: RpcDiskWriteFileRequest,
         context: ServerCallContext
@@ -228,6 +295,7 @@ class RpcConnector implements IPoolConnector {
             const data = await disk.get(request.path);
             return {
                 data,
+                exists: true,
             };
         } catch (e) {
             console.log(e);
@@ -237,6 +305,11 @@ class RpcConnector implements IPoolConnector {
 
     getNodeId(context: ServerCallContext): string {
         return context.headers["nodeid"] as string;
+    }
+
+    async getCache(context: ServerCallContext): Promise<CacheDisk> {
+        const cacheId = context.headers["cacheid"] as string;
+        return this.cache.get(cacheId);
     }
 
     async getJob(request: RpcGetJob, context: ServerCallContext): Promise<Job> {
@@ -401,7 +474,7 @@ class RpcConnector implements IPoolConnector {
     }
 
     async getEvents(request: RpcGetEventsRequest, context: ServerCallContext): Promise<RpcGetEventsResponse> {
-        try{
+        try {
             const nodeId = this.getNodeId(context);
             const events: string[] = await this.conn.getAndConsumeCustomEvents(
                 request.groupId,
@@ -489,6 +562,7 @@ export default class RPCServer {
     serverKey: Buffer | undefined;
     hyperdrivePool: HyperdrivePool;
     poolSecretKey: string;
+    cache: Cache;
     constructor(
         poolSecretKey: string,
         addr: string,
@@ -496,6 +570,7 @@ export default class RPCServer {
         descriptorPath: string,
         nostrConnector: NostrConnector,
         hyperdrivePool: HyperdrivePool,
+        cache: Cache,
         caCrt?: Buffer,
         serverCrt?: Buffer,
         serverKey?: Buffer
@@ -508,6 +583,8 @@ export default class RPCServer {
         this.serverCrt = serverCrt;
         this.serverKey = serverKey;
         this.hyperdrivePool = hyperdrivePool;
+        this.cache = cache;
+        this.poolSecretKey = poolSecretKey;
     }
 
     async start() {
@@ -521,7 +598,7 @@ export default class RPCServer {
                     this.poolSecretKey,
                     GPRCBackend.adaptService(
                         PoolConnector,
-                        new RpcConnector(this.nostrConnector, this.hyperdrivePool)
+                        new RpcConnector(this.nostrConnector, this.hyperdrivePool, this.cache)
                     )
                 )
             );

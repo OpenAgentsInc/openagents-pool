@@ -8,6 +8,13 @@ export default class Utils {
         return uuidv4();
     }
 
+    static satoshiTimestamp(){
+        // time in milliseconds since 3 january 2009
+        const jan32009=new Date("2009-01-03").getTime();
+        const now=new Date().getTime();
+        return now-jan32009;
+    }
+
     static async encryptNostr(
         text: string,
         ourPrivateKey: string | Uint8Array,

@@ -500,6 +500,29 @@ export default class NostrConnector {
         }));
     }
 
+    async deleteEvents(ids){
+        const maxIdsPerEvent = 21;
+        const waitQueue = [];
+        for(let i = 0; i < ids.length;i+=maxIdsPerEvent){
+            const idsToDelete = [];
+            for(let j = 0; j < maxIdsPerEvent && i+j < ids.length;j++){
+                idsToDelete.push(ids[i]);
+            }
+            waitQueue.push(this.sendEvent(
+                {
+                    kind: 5,
+                    created_at: Math.floor(Date.now() / 1000),
+                    tags: [...idsToDelete.map((id) => ["e", id])],
+                    content: "Driver closed",
+                },
+                true
+            ));
+        }
+
+        return Promise.all(waitQueue);
+
+    }
+
     async unannounceHyperdrive( bundleUrl: string): Promise<void> {
         const discoveryHash = await Utils.getHyperdriveDiscoveryKey(bundleUrl);
         const filter: Filter = {
@@ -508,19 +531,44 @@ export default class NostrConnector {
             "#m": ["application/hyperdrive+bundle"]
         };
         const events = await this.query(filter);
-        await this.sendEvent({
-            kind: 5,
-            created_at: Math.floor(Date.now() / 1000),
-            tags: [
-                ...events.map((event) => ["e", event.id]),
-            ],
-            content: "Driver closed"
-        }, true);
+        // await this.sendEvent({
+        //     kind: 5,
+        //     created_at: Math.floor(Date.now() / 1000),
+        //     tags: [
+        //         ...events.map((event) => ["e", event.id]),
+        //     ],
+        //     content: "Driver closed"
+        // }, true);
+        await this.deleteEvents(events.map((event) => event.id));
 
     }
 
     async announceHyperdrive(nodeId: string, bundleUrl: string, driverUrl: string, version: string|number): Promise<string> {
         const encryptedData = await Utils.encryptHyperdrive(driverUrl, bundleUrl);
+        const filter: Filter = {
+             kinds: [1063],
+             "#x": [encryptedData.discoveryHash],
+             "#m": ["application/hyperdrive+bundle"]
+        };
+        const oldAnnouncements = await this.query(filter);
+        // for(const event of oldAnnouncements){
+        //     const oldUrl = Utils.getTagVars(event, ["url"])[0][0];
+        //     if(oldUrl == encryptedData.encryptedUrl){
+        //         return event.id;
+        //     }
+        // }
+        let deleteOlds;
+        try{
+            deleteOlds =  this.deleteEvents(oldAnnouncements.filter((event)=>{
+                const oldUrl = Utils.getTagVars(event, ["url"])[0][0];
+                const nodeId = Utils.getTagVars(event, ["d"])[0][0];
+                return oldUrl == encryptedData.encryptedUrl && nodeId == nodeId;    
+            }).map((event) => event.id));
+        }catch(e){
+            console.error("Error deleting old announcements", e);
+            deleteOlds = Promise.resolve();
+        }
+
         const event: EventTemplate = {
             kind: 1063,
             created_at: Math.floor(Date.now() / 1000),
@@ -533,7 +581,9 @@ export default class NostrConnector {
             ],
             content: "",
         };
-        const submittedEvent = await this.sendEvent(event, true);
-        return submittedEvent.id;
+        
+        const submittedEvent = this.sendEvent(event, true);
+        await deleteOlds;
+        return (await submittedEvent).id;
     }
 }
