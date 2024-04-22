@@ -609,15 +609,19 @@ export default class RPCServer {
                 const reflection = new ReflectionService(pkg);
                 reflection.addToServer(server);
             }
+            const useSecure = this.caCrt || this.serverCrt || this.serverKey;
+            if(useSecure){
+                console.log("Using secure connection");
+            }
             server.bindAsync(
                 `${this.addr}:${this.port}`,
-                this.caCrt || this.serverCrt || this.serverKey
+                useSecure
                     ? GRPC.ServerCredentials.createSsl(
-                          this.caCrt||null,
+                          this.caCrt || null,
                           [
                               {
-                                  private_key: this.serverKey||null,
-                                  cert_chain: this.serverCrt||null,
+                                  private_key: this.serverKey || null,
+                                  cert_chain: this.serverCrt || null,
                               },
                           ],
                           false
