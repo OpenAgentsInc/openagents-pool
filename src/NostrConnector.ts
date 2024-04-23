@@ -57,9 +57,9 @@ export default class NostrConnector {
         secretKey: string,
         relays: Array<string>,
         filterProvider: ((provider: string) => boolean) | undefined,
-        maxEventDuration: number = 1000 * 60 * 60,
-        maxJobExecutionTime: number = 1000 * 60 * 10,
-        announcementTimeout: number = 1000 * 60 * 10
+        maxEventDuration: number = 1000 * 60 * 10,
+        maxJobExecutionTime: number = 1000 * 60 * 5,
+        announcementTimeout: number = 1000 * 60 * 5
     ) {
         this.jobs = [];
         this.customSubscriptions = new Map();
@@ -347,7 +347,7 @@ export default class NostrConnector {
             job.id = id;
             this.jobs.push(job);
         }
-        console.log(this.jobs.length, "jobs");
+        // console.log(this.jobs.length, "jobs");
         if (job) {
             await this._resolveJobInputs(nodeId, job);
             if (!job.areInputsAvailable()) {
@@ -444,7 +444,7 @@ export default class NostrConnector {
         if (kind && !((kind >= 5000 && kind <= 5999) || (kind >= 6000 && kind <= 6999)))
             throw new Error("Invalid kind " + kind);
         const job = new Job(
-            expireAfter,
+            Math.min(expireAfter,this.maxEventDuration),
             runOn,
             description,
             input,

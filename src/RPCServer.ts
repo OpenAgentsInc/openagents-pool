@@ -355,6 +355,7 @@ class RpcConnector implements IPoolConnector {
         try {
             const nodeId = this.getNodeId(context);
             const job = await this.getJob(request, context);
+            
             if (job && job.state.status == JobStatus.SUCCESS) {
                 return {
                     isDone: true,

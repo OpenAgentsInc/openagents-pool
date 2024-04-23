@@ -41,12 +41,13 @@ export default class Job implements _Job {
         acceptedBy: "",
         timestamp: 0,
     };
-    expireAfter: number;
+    maxEventDuration: number;
     maxExecutionTime: number;
     outputFormat: string = "application/json";
     nodeId: string = "";
+    assignedTo: string[] = [];
     constructor(
-        expireAfter: number,
+        maxEventDuration: number,
         runOn: string,
         description: string,
         input: JobInput[] | undefined,
@@ -58,9 +59,9 @@ export default class Job implements _Job {
         nodeId?: string
     ) {
         this.timestamp = Date.now();
-        this.expireAfter = expireAfter;
-        this.expiration = this.timestamp + expireAfter;
-        this.maxExecutionTime = maxExecutionTime;
+        this.maxEventDuration = Math.min(maxEventDuration,1000*60*2);
+        this.expiration = this.timestamp + maxEventDuration;
+        this.maxExecutionTime = Math.min(maxExecutionTime,1000*60*2);
         this.nodeId = nodeId || "";
 
         if (outputFormat) {
@@ -104,10 +105,10 @@ export default class Job implements _Job {
             const runOn: string = Utils.getTagVars(event, ["param", "run-on"])[0][0] || "generic";
             const customerPublicKey: string = event.pubkey;
             const timestamp: number = Number(event.created_at) * 1000;
-            const expiration: number = Math.max(
+            const expiration: number = Math.min(
                 Number(Utils.getTagVars(event, ["expiration"])[0][0] || "0") * 1000 ||
-                    timestamp + this.expireAfter,
-                timestamp + this.expireAfter
+                    timestamp + this.maxEventDuration,
+                timestamp + this.maxEventDuration
             );
             const nodeId = Utils.getTagVars(event, ["d"])[0][0] || "";
 
@@ -233,7 +234,7 @@ export default class Job implements _Job {
                     }
                 }
 
-                if (state.timestamp < timestamp) {
+                if(state.status!=JobStatus.SUCCESS){
                     if (status == "success") {
                         state.status = JobStatus.SUCCESS;
                     } else if (status == "processing") {
@@ -247,14 +248,17 @@ export default class Job implements _Job {
                     }
                     state.timestamp = timestamp;
                 }
+                
             } else {
                 // result
-                const result = this.result;
+                if(!this.result.timestamp){
+                    const result = this.result;
 
-                if (result.timestamp < timestamp) {
-                    result.content = content;
-                    result.timestamp = timestamp;
-                    result.id = event.id;
+                    if (result.timestamp < timestamp) {
+                        result.content = content;
+                        result.timestamp = timestamp;
+                        result.id = event.id;
+                    }
                 }
             }
         }

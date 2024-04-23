@@ -18,7 +18,7 @@ async function main(){
     const PORT = Number(process.env.GRPC_BINDING_PORT || 5000);
     const DESCRIPTOR_PATH= process.env.GRPC_PROTO_DESCRIPTOR_PATH || "./docs/descriptor.pb";
     const SECRET_KEY = process.env.NOSTR_SECRET_KEY || bytesToHex(generateSecretKey());
-    const RELAYS = (process.env.NOSTR_RELAYS || "wss://nostr.rblb.it:7777").split(",");
+    const RELAYS = (process.env.NOSTR_RELAYS || "wss://nostr.rblb.it:7777,wss://openagents.forkforge.net:7777").split(",");
     const WEBHOOKS = (process.env.WEBHOOKS || "").split(",");
     const PUBLIC_KEY = getPublicKey(hexToBytes(SECRET_KEY));
 

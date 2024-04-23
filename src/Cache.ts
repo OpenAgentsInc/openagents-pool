@@ -92,7 +92,7 @@ export default class Cache {
         for (const cache of Object.values(this.CACHES)){
             await cache.commit();
         }
-        setTimeout(()=>this._commit(),10000);
+        setTimeout(()=>this._commit(),10*60000);
     }
 
     async get(name: string): Promise<CacheDisk> {
