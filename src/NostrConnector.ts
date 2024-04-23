@@ -47,7 +47,9 @@ export default class NostrConnector {
 
     announcementTimeout: number;
     maxEventDuration: number;
+    minEventDuration: number = 1000 * 60 * 2;
     maxJobExecutionTime: number;
+    minJobExecutionTime: number = 1000 * 60 * 1;
     since: number;
     filterProvider: ((provider: string) => boolean) | undefined;
     webhooks: WebHooks | undefined;
@@ -444,7 +446,7 @@ export default class NostrConnector {
         if (kind && !((kind >= 5000 && kind <= 5999) || (kind >= 6000 && kind <= 6999)))
             throw new Error("Invalid kind " + kind);
         const job = new Job(
-            Math.min(expireAfter,this.maxEventDuration),
+            Utils.clamp(expireAfter, this.minEventDuration, this.maxEventDuration),
             runOn,
             description,
             input,
@@ -456,7 +458,7 @@ export default class NostrConnector {
             nodeId
         );
         const events: Array<VerifiedEvent> = await job.toRequest(sk);
-        for (const event of events) this.sendEvent(event);
+        await Promise.all(events.map((event)=>this.sendEvent(event)));
         return job;
     }
 

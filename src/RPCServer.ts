@@ -3,7 +3,7 @@ import * as GPRCBackend from "@protobuf-ts/grpc-backend";
 import { ReflectionService } from "@grpc/reflection";
 import { loadFileDescriptorSetFromBuffer } from "@grpc/proto-loader";
 import Auth from "./Auth";
-
+import Utils from "./Utils";
  import {
     Writable,
     Readable
@@ -316,7 +316,23 @@ class RpcConnector implements IPoolConnector {
         try {
             const nodeId = this.getNodeId(context);
             const id = request.jobId;
-            const job = await this.conn.getJob(nodeId, id);
+            let job = undefined;
+            if (request.wait) {
+                job = await Utils.busyWaitForSomething(
+                    async () => {
+                        try {
+                            job = await this.getJob(request, context);
+                            const isDone = job && job.state.status == JobStatus.SUCCESS && job.result.timestamp;
+                            if (isDone) return job;
+                        } catch (e) {}
+                        return undefined;
+                    }, () => {
+                        return job; // return last fetched job
+                    },
+                    request.wait
+                );
+            } 
+            if(!job) job = await this.conn.getJob(nodeId, id);    
             return job;
         } catch (e) {
             console.log(e);
@@ -332,15 +348,31 @@ class RpcConnector implements IPoolConnector {
             const runOnFilter: RegExp = new RegExp(request.filterByRunOn || ".*");
             const descriptionFilter: RegExp = new RegExp(request.filterByDescription || ".*");
             const kindFilter: RegExp = new RegExp(request.filterByKind || ".*");
-            const jobs = await this.conn.findJobs(
-                nodeId,
-                jobIdFilter,
-                runOnFilter,
-                descriptionFilter,
-                customerFilter,
-                kindFilter,
-                true
-            );
+
+            const findJobs=async ()=>{
+                return await this.conn.findJobs(
+                    nodeId,
+                    jobIdFilter,
+                    runOnFilter,
+                    descriptionFilter,
+                    customerFilter,
+                    kindFilter,
+                    true
+                );
+            };
+
+            let jobs = [];
+            if(request.wait){
+                jobs=await Utils.busyWaitForSomething(async ()=>{
+                    const j = await findJobs();
+                    if(j.length>0)return j;
+                },()=>{
+                    return [];
+                },request.wait);
+            }else[
+                jobs=await findJobs()
+            ]
+
             const pendingJobs: PendingJobs = {
                 jobs,
             };
@@ -354,17 +386,27 @@ class RpcConnector implements IPoolConnector {
     async isJobDone(request: RpcGetJob, context: ServerCallContext): Promise<RpcIsJobDone> {
         try {
             const nodeId = this.getNodeId(context);
-            const job = await this.getJob(request, context);
-            
-            if (job && job.state.status == JobStatus.SUCCESS) {
-                return {
-                    isDone: true,
-                };
-            } else {
-                return {
-                    isDone: false,
-                };
-            }
+            let isDone=false
+            if(request.wait){
+                isDone=await Utils.busyWaitForSomething(async ()=>{
+                    try{
+                        const job = await this.getJob(request, context);
+                        const isDone=job && job.state.status == JobStatus.SUCCESS &&job.result.timestamp;
+                        if(isDone)return true;
+                    }catch(e){
+                    }
+                    return undefined;
+                },()=>{
+                    return false;
+                },request.wait);
+            }else{
+                const job = await this.getJob(request, context);
+                isDone=job && job.state.status == JobStatus.SUCCESS && job.result.timestamp>0;
+            }            
+            return {
+                isDone
+            };
+           
         } catch (e) {
             console.log(e);
             throw e;

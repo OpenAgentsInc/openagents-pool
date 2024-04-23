@@ -59,10 +59,14 @@ export default class Job implements _Job {
         nodeId?: string
     ) {
         this.timestamp = Date.now();
-        this.maxEventDuration = Math.min(maxEventDuration,1000*60*2);
+        this.maxEventDuration = maxEventDuration;
         this.expiration = this.timestamp + maxEventDuration;
-        this.maxExecutionTime = Math.min(maxExecutionTime,1000*60*2);
+        this.maxExecutionTime = maxExecutionTime;
         this.nodeId = nodeId || "";
+        if(this.maxExecutionTime<=5000) throw new Error("Invalid max execution time");
+        if(this.maxEventDuration<=5000) throw new Error("Invalid max event duration");
+    
+
 
         if (outputFormat) {
             this.outputFormat = outputFormat;
@@ -105,11 +109,11 @@ export default class Job implements _Job {
             const runOn: string = Utils.getTagVars(event, ["param", "run-on"])[0][0] || "generic";
             const customerPublicKey: string = event.pubkey;
             const timestamp: number = Number(event.created_at) * 1000;
-            const expiration: number = Math.min(
+            const expiration: number = Math.max(Math.min(
                 Number(Utils.getTagVars(event, ["expiration"])[0][0] || "0") * 1000 ||
                     timestamp + this.maxEventDuration,
                 timestamp + this.maxEventDuration
-            );
+            ),timestamp+60000);
             const nodeId = Utils.getTagVars(event, ["d"])[0][0] || "";
 
             const relays: Array<string> = Utils.getTagVars(event, ["relays"])[0] || defaultRelays;
@@ -251,7 +255,8 @@ export default class Job implements _Job {
                 
             } else {
                 // result
-                if(!this.result.timestamp){
+                // if (content=="") return;
+                if (!this.result.timestamp) {
                     const result = this.result;
 
                     if (result.timestamp < timestamp) {

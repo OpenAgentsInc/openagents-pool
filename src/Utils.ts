@@ -8,6 +8,29 @@ export default class Utils {
         return uuidv4();
     }
 
+    static async busyWaitForSomething(cb: ()=>any,onTimeoutResultGenerator: ()=>any,maxMs: number=10000, sleep: number=21): Promise<any> {
+        const start = Date.now();
+        return new Promise((resolve, reject) => {
+            const loop =async () => {
+                try {
+                    const v=await cb();
+                    if (v!==undefined) {
+                        resolve(v);
+                    } else {
+                        const now = Date.now();
+                        if (now - start > maxMs) {
+                            resolve(await onTimeoutResultGenerator());
+                        } else {
+                            setTimeout(loop, sleep);
+                        }
+                    }
+                } catch (e) {
+                    reject(e);
+                }
+            };
+            loop();
+        });
+    }
     static satoshiTimestamp(){
         // time in milliseconds since 3 january 2009
         const jan32009=new Date("2009-01-03").getTime();
@@ -35,6 +58,9 @@ export default class Utils {
             secret = hexToBytes(secret);
         }
         return getPublicKey(secret);
+    }
+    static clamp(value, min, max) {
+        return Math.min(Math.max(value, min), max);
     }
 
     static async encryptHyperdrive(url: string, secretKey: string | Uint8Array):Promise<{
