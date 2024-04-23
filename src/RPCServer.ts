@@ -321,7 +321,7 @@ class RpcConnector implements IPoolConnector {
                 job = await Utils.busyWaitForSomething(
                     async () => {
                         try {
-                            job = await this.getJob(request, context);
+                            job = await this.conn.getJob(nodeId, id);    
                             const isDone = job && job.state.status == JobStatus.SUCCESS && job.result.timestamp;
                             if (isDone) return job;
                         } catch (e) {}
