@@ -87,6 +87,7 @@ export default class NostrConnector {
             {
                 onevent: (event) => {
                     try {
+                        this.callWebHooks("Event", event);
                         if (event.kind >= 5000 && event.kind <= 5999) {
                             console.log("Received event", event);
                             this.getJob("", event.id, true).then((job) => {
