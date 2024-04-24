@@ -96,32 +96,7 @@ export class SharedDrive extends EventEmitter {
         }
         if (!atLeastOneDrive) throw "No writable drives";
         this.lastAccess = Date.now();
-        // const pt = new PassThrough() as any;
-        // pt.on("error", (e) => console.log(`Error in outputStream: ${e}`));
-
-        // let endedStreams = 0;
-        // for (const stream of streams) {
-        //     pt.pipe(stream);
-        //     stream.on("close", () => {
-        //         endedStreams++;
-        //     });
-        // }
-
-        // pt.on("finish", () => {
-        //     for (const stream of streams) {
-        //         stream.end();
-        //     }
-        // });
-
-        // pt.flushAndWait = async () => {
-        //     for (const stream of streams) {
-        //         stream.end();
-        //     }
-        //     pt.end();
-        //     while (endedStreams < streams.length) {
-        //         await new Promise((res) => setTimeout(res, 10));
-        //     }
-        // };
+    
         const pt: DriverOut = {
             flushAndWait: async () => {
                 let endedStreams = 0;
@@ -326,7 +301,7 @@ export default class HyperdrivePool {
         encryptionKey?: string,
         includeEncryptionKeyInUrl: boolean = false,
     ): Promise<string> {
-        await this.discovery.flushed();
+        // await this.discovery.flushed();
 
         const bundleUrl =
             "hyperdrive+bundle://" +
@@ -360,7 +335,7 @@ export default class HyperdrivePool {
             bundleUrl = "hyperdrive+bundle://" + bundleUrl;
         }
         
-        await this.discovery.flushed();
+        // await this.discovery.flushed();
         const bundleData = this.parseHyperUrl(bundleUrl, encryptionKey);
 
         const corestore = this.store.namespace(bundleUrl.replace(/[^a-zA-Z0-9]/g, "_"));
@@ -381,15 +356,11 @@ export default class HyperdrivePool {
 
         let drives;
         
-        // while (true) {
-            drives = await this.conn.findAnnouncedHyperdrives(bundleUrl);
-        //     if (drives && drives.length > 0) break;
-        //     console.log("Waiting for remote drivers...");
-        //     await new Promise((resolve) => setTimeout(resolve, 10));
-        // }
-
+        drives = await this.conn.findAnnouncedHyperdrives(bundleUrl);      
         console.log("Found", drives, "remote disks");
+        
         let connectedRemoteDrivers = false;
+        const waitList=[];
         for (const drive of drives) {
             const driverData = this.parseHyperUrl(drive.url, bundleData.encryptionKey);
             if (!sharedDrive.hasDrive(driverData.key)) {
@@ -398,16 +369,19 @@ export default class HyperdrivePool {
                         ? b4a.from(driverData.encryptionKey, "hex")
                         : undefined,
                 });
-                await hd.ready();
-                hd = await hd.checkout(Number(drive.version));
-                await hd.ready();
-                sharedDrive.addDrive(hd, drive.owner);
+                waitList.push((async () => {
+                    await hd.ready();
+                    hd = await hd.checkout(Number(drive.version));
+                    await hd.ready();
+                    sharedDrive.addDrive(hd, drive.owner);
+                })());
                 connectedRemoteDrivers = true;
                 console.log("Connected to remote disk", drive.url);
             } else {
                 console.log("Already connected to remote disk", drive.url);
             }
         }
+        if (waitList.length>0) await Promise.all(waitList);
 
         if (connectedRemoteDrivers) {
             // wait for at least 1 peer to be online
@@ -418,7 +392,7 @@ export default class HyperdrivePool {
                         client: true,
                         server: true,
                     });
-                    await new Promise((resolve) => setTimeout(resolve, 5000));
+                    await new Promise((resolve) => setTimeout(resolve, 100));
                 } else {
                     console.log("Connected to", this.nPeers, "peers");
                     break;
@@ -445,19 +419,5 @@ export default class HyperdrivePool {
         await sharedDriver.commit();
     }
 
-    // async close(bundleUrl: string | undefined) {
-    //     if (!bundleUrl) {
-    //         for (const key in this.drives) {
-    //             // this.drives[key].close();
-    //         }
-    //         this.discovery.destroy();
-    //         this.swarm.destroy();
-    //         this.isClosed = true;
-    //     } else {
-    //         const sharedDriver = this.drives[bundleUrl];
-    //         if (!sharedDriver) throw "Driver not open";
-    //         // sharedDriver.close();
-    //         delete this.drives[bundleUrl];
-    //     }
-    // }
+    
 }

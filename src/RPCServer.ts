@@ -348,6 +348,7 @@ class RpcConnector implements IPoolConnector {
             const runOnFilter: RegExp = new RegExp(request.filterByRunOn || ".*");
             const descriptionFilter: RegExp = new RegExp(request.filterByDescription || ".*");
             const kindFilter: RegExp = new RegExp(request.filterByKind || ".*");
+            const excludeIds : string[] = request.excludeId || [];
 
             const findJobs=async ()=>{
                 return await this.conn.findJobs(
@@ -357,7 +358,8 @@ class RpcConnector implements IPoolConnector {
                     descriptionFilter,
                     customerFilter,
                     kindFilter,
-                    true
+                    true,
+                    excludeIds
                 );
             };
 
