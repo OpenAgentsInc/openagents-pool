@@ -476,7 +476,9 @@ class RpcConnector implements IPoolConnector {
                 request.param,
                 request.description,
                 request.kind,
-                request.outputFormat
+                request.outputFormat,
+                request.requestProvider,
+                request.encrypted
             );
         } catch (e) {
             console.log(e);

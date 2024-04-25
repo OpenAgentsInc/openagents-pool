@@ -46,6 +46,7 @@ export default class Job implements _Job {
     outputFormat: string = "application/json";
     nodeId: string = "";
     assignedTo: string[] = [];
+    encrypted: boolean = false;
     constructor(
         maxEventDuration: number,
         runOn: string,
@@ -56,17 +57,17 @@ export default class Job implements _Job {
         relays?: string[],
         kind?: number,
         outputFormat?: string,
-        nodeId?: string
+        nodeId?: string,
+        provider?: string,
+        encrypted: boolean = false
     ) {
         this.timestamp = Date.now();
         this.maxEventDuration = maxEventDuration;
         this.expiration = this.timestamp + maxEventDuration;
         this.maxExecutionTime = maxExecutionTime;
         this.nodeId = nodeId || "";
-        if(this.maxExecutionTime<=5000) throw new Error("Invalid max execution time");
-        if(this.maxEventDuration<=5000) throw new Error("Invalid max event duration");
-    
-
+        if (this.maxExecutionTime <= 5000) throw new Error("Invalid max execution time");
+        if (this.maxEventDuration <= 5000) throw new Error("Invalid max event duration");
 
         if (outputFormat) {
             this.outputFormat = outputFormat;
@@ -91,33 +92,45 @@ export default class Job implements _Job {
         if (param) {
             this.param.push(...param);
         }
+        if (provider) {
+            this.provider = provider;
+            this.encrypted = !!encrypted;
+        } else {
+            if (encrypted) {
+                throw new Error("Provider is required for encrypted jobs");
+            }
+        }
     }
 
-    merge(
-        event: Event,
-        defaultRelays: Array<string>,
-        filterProvider: ((provider: string) => boolean) | undefined
-    ) {
+    merge(event: Event, defaultRelays: Array<string>) {
         if (event.kind >= 5000 && event.kind <= 5999) {
             // request
             const id = event.id;
+            
             const provider: string = Utils.getTagVars(event, ["p"])[0][0];
-            if (filterProvider && !filterProvider(provider)) {
+            if (this.provider && provider && provider != this.provider) {
+                console.error("Invalid provider");
                 return;
             }
+            
             const kind: number = event.kind;
             const runOn: string = Utils.getTagVars(event, ["param", "run-on"])[0][0] || "generic";
             const customerPublicKey: string = event.pubkey;
             const timestamp: number = Number(event.created_at) * 1000;
-            const expiration: number = Math.max(Math.min(
-                Number(Utils.getTagVars(event, ["expiration"])[0][0] || "0") * 1000 ||
-                    timestamp + this.maxEventDuration,
-                timestamp + this.maxEventDuration
-            ),timestamp+60000);
+            const expiration: number = Math.max(
+                Math.min(
+                    Number(Utils.getTagVars(event, ["expiration"])[0][0] || "0") * 1000 ||
+                        timestamp + this.maxEventDuration,
+                    timestamp + this.maxEventDuration
+                ),
+                timestamp + 60000
+            );
             const nodeId = Utils.getTagVars(event, ["d"])[0][0] || "";
+            const encrypted = Utils.getTagVars(event, ["encrypted"])[0][0] == "true";
 
             const relays: Array<string> = Utils.getTagVars(event, ["relays"])[0] || defaultRelays;
-            const expectedOutputFormat: string = Utils.getTagVars(event, ["output"])[0][0] || "application/json";
+            const expectedOutputFormat: string =
+                Utils.getTagVars(event, ["output"])[0][0] || "application/json";
             // const bid = Utils.getTagVars(event, ["bid"], 1)[0];
             // const t = Utils.getTagVars(event, ["t"], 1)[0];
             const description: string =
@@ -158,7 +171,8 @@ export default class Job implements _Job {
                     marker,
                 });
             }
-
+            if (!this.id) this.id = id;
+            this.provider = provider;
             this.nodeId = nodeId;
             this.id = id;
             this.runOn = runOn;
@@ -166,7 +180,8 @@ export default class Job implements _Job {
             this.timestamp = timestamp;
             this.customerPublicKey = customerPublicKey;
             this.description = description;
-            this.provider = provider;
+            this.encrypted=encrypted;
+
             this.relays = [];
             this.outputFormat = expectedOutputFormat;
             // this.results = {};
@@ -179,6 +194,7 @@ export default class Job implements _Job {
                 }
             }
         } else if (event.kind == 7000 || (event.kind >= 6000 && event.kind <= 6999)) {
+            
             const e: Array<string> = Utils.getTagVars(event, ["e"])[0];
             const jobId: string = e[0];
             if (!jobId) throw new Error("No job id");
@@ -188,7 +204,8 @@ export default class Job implements _Job {
             }
 
             const provider: string = event.pubkey;
-            if (filterProvider && !filterProvider(provider)) {
+            if (this.provider && provider != this.provider) {
+                console.error("Invalid provider");
                 return;
             }
             const content: string = event.content;
@@ -206,7 +223,7 @@ export default class Job implements _Job {
             }
 
             const timestamp = Number(event.created_at) * 1000;
-            const nodeId= Utils.getTagVars(event, ["d"])[0][0] || "";
+            const nodeId = Utils.getTagVars(event, ["d"])[0][0] || "";
             if (event.kind == 7000) {
                 // TODO: content?
                 let [status, info] = Utils.getTagVars(event, ["status"])[0];
@@ -238,7 +255,7 @@ export default class Job implements _Job {
                     }
                 }
 
-                if(state.status!=JobStatus.SUCCESS){
+                if (state.status != JobStatus.SUCCESS) {
                     if (status == "success") {
                         state.status = JobStatus.SUCCESS;
                     } else if (status == "processing") {
@@ -252,7 +269,6 @@ export default class Job implements _Job {
                     }
                     state.timestamp = timestamp;
                 }
-                
             } else {
                 // result
                 // if (content=="") return;
@@ -286,15 +302,15 @@ export default class Job implements _Job {
         return this.expiration < Date.now();
     }
 
-    async accept(nodeId: string, pk: string, sk: Uint8Array): Promise<Array<VerifiedEvent>> {
+    async accept(nodeId: string, acceptedBy: string): Promise<Array<EventTemplate>> {
         const t = Date.now();
         const state = this.state;
         state.acceptedAt = t;
-        state.acceptedBy = pk;
+        state.acceptedBy = acceptedBy;
         state.status = JobStatus.PROCESSING;
 
         const customerPublicKey = this.customerPublicKey;
-        const feedbackEvent: EventTemplate = {
+        let feedbackEvent: EventTemplate = {
             kind: 7000,
             content: "",
             created_at: Math.floor(t / 1000),
@@ -304,14 +320,14 @@ export default class Job implements _Job {
                 ["p", customerPublicKey],
                 ["d", nodeId],
                 ["expiration", "" + Math.floor(this.expiration / 1000)],
-            ],
+                this.encrypted ? ["encrypted", "true"] : undefined,
+            ].filter((t) => t),
         };
-        const events: Array<VerifiedEvent> = [];
-        events.push(finalizeEvent(feedbackEvent, sk));
-        return events;
+        
+        return [feedbackEvent];
     }
 
-    async cancel(nodeId: string, pk: string, sk: Uint8Array, reason: string): Promise<Array<VerifiedEvent>> {
+    async cancel(nodeId: string, cancelledBy: string, reason: string): Promise<Array<EventTemplate>> {
         const state = this.state;
         state.acceptedAt = 0;
         state.acceptedBy = "";
@@ -328,25 +344,15 @@ export default class Job implements _Job {
                 ["p", customerPublicKey],
                 ["d", nodeId],
                 ["expiration", "" + Math.floor(this.expiration / 1000)],
-            ],
+                this.encrypted ? ["encrypted", "true"] : undefined,
+            ].filter((t) => t),
         };
-        const events: Array<VerifiedEvent> = [];
-        events.push(finalizeEvent(feedbackEvent, sk));
-
-        state.logs.push({
-            id: events[0].id,
-            timestamp: Date.now(),
-            log: reason,
-            level: "error",
-            source: pk,
-            nodeId: nodeId,
-        });
-
-        return events;
+        
+        return [feedbackEvent];
     }
 
-    async output(nodeId: string, pk: string, sk: Uint8Array, data: string): Promise<Array<VerifiedEvent>> {
-        const t = Date.now();
+    async output(nodeId: string, outputBy: string, data: string): Promise<Array<EventTemplate>> {
+        // const t = Date.now();
         const resultEvent: EventTemplate = {
             kind: 6003,
             content: data,
@@ -356,25 +362,20 @@ export default class Job implements _Job {
                 ["p", this.customerPublicKey],
                 ["expiration", "" + Math.floor(this.expiration / 1000)],
                 ["d", nodeId],
-            ],
+                this.encrypted ? ["encrypted", "true"] : undefined,
+            ].filter((t) => t),
         };
-        this.result.content = data;
-        this.result.timestamp = t;
-        const events: Array<VerifiedEvent> = [];
-        events.push(finalizeEvent(resultEvent, sk));
-        this.result.id = events[0].id;
-        return events;
+        // this.result.content = data;
+        // this.result.timestamp = t;
+        // const events: Array<EventTemplate> = [];
+        // events.push(resultEvent);
+        // this.result.id = events[0].id;
+        return [resultEvent];
     }
 
-    async complete(
-        nodeId: string,
-        pk: string,
-        sk: Uint8Array,
-        result: any,
-        info?: string
-    ): Promise<Array<VerifiedEvent>> {
-        const events: Array<VerifiedEvent> = [];
-        events.push(...(await this.output(nodeId, pk, sk, result)));
+    async complete(nodeId: string, pk: string, result: any, info?: string): Promise<Array<EventTemplate>> {
+        const events: Array<EventTemplate> = [];
+        events.push(...(await this.output(nodeId, pk, result)));
         const feedbackEvent: EventTemplate = {
             kind: 7000,
             content: info || "",
@@ -385,15 +386,16 @@ export default class Job implements _Job {
                 ["p", this.customerPublicKey],
                 ["expiration", "" + Math.floor(this.expiration / 1000)],
                 ["d", nodeId],
-            ],
+                this.encrypted ? ["encrypted", "true"] : undefined,
+            ].filter((t) => t),
         };
-        events.push(finalizeEvent(feedbackEvent, sk));
-        this.state.status = JobStatus.SUCCESS;
-        this.state.timestamp = Date.now();
+        events.push(feedbackEvent);
+        // this.state.status = JobStatus.SUCCESS;
+        // this.state.timestamp = Date.now();
         return events;
     }
 
-    async log(nodeId:string, pk: string, sk: Uint8Array, log: string): Promise<Array<VerifiedEvent>> {
+    async log(nodeId: string, pk: string, log: string): Promise<Array<EventTemplate>> {
         const t = Date.now();
         const state = this.state;
         const feedbackEvent: EventTemplate = {
@@ -405,20 +407,12 @@ export default class Job implements _Job {
                 ["e", this.id],
                 ["p", this.customerPublicKey],
                 ["expiration", "" + Math.floor(this.expiration / 1000)],
-                ["d", nodeId]
-            ],
+                ["d", nodeId],
+                this.encrypted ? ["encrypted", "true"] : undefined,
+            ].filter((t) => t),
         };
-        const events: Array<VerifiedEvent> = [];
-        events.push(finalizeEvent(feedbackEvent, sk));
-        state.logs.push({
-            id: events[0].id,
-            timestamp: t,
-            log: log,
-            level: "log",
-            source: pk,
-            nodeId: nodeId
-        });
-        return events;
+      
+            return [feedbackEvent];
     }
 
     async resolveInputs(resolver: (ref: string, type: string) => Promise<string | undefined>): Promise<void> {
@@ -441,7 +435,7 @@ export default class Job implements _Job {
         return true;
     }
 
-    async toRequest(customerSecretKey: Uint8Array): Promise<Array<VerifiedEvent>> {
+    async toRequest(): Promise<Array<EventTemplate>> {
         const t = Date.now();
         const inputs: string[][] = [];
         for (const iinput of this.input) {
@@ -465,20 +459,17 @@ export default class Job implements _Job {
             tags: [
                 ...inputs,
                 ...params,
-                // TODO provider whitelist
-                // this.provider?[("p", this.provider)]:undefined,
+                this.provider ? ["p", this.provider] : undefined,
                 ["expiration", "" + Math.floor(this.expiration / 1000)],
                 this.relays ? ["relays", ...this.relays] : undefined,
                 ["param", "run-on", this.runOn],
-                [ "about", this.description],
+                ["about", this.description],
                 ["output", this.outputFormat],
                 ["d", this.nodeId],
-            ],
+                this.encrypted ? ["encrypted", "true"] : undefined,
+            ].filter((t) => t),
         };
-
-        const events = [finalizeEvent(eventRequest, customerSecretKey)];
-        this.id = events[0].id;
-
-        return events;
+        // this.id = eventRequest.id;
+        return [eventRequest];
     }
 }

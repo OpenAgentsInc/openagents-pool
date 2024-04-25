@@ -38,7 +38,7 @@ export default class Utils {
         return now-jan32009;
     }
 
-    static async encryptNostr(
+    static async encrypt(
         text: string,
         ourPrivateKey: string | Uint8Array,
         theirPublicKey: string
@@ -46,9 +46,76 @@ export default class Utils {
         return await nip04.encrypt(ourPrivateKey, theirPublicKey, text);
     }
 
-    static async decryptNostr(text: string, ourPrivateKey: string, theirPublicKey: string): Promise<string> {
+    static async decrypt(text: string, ourPrivateKey: string, theirPublicKey: string): Promise<string> {
         return await nip04.decrypt(ourPrivateKey, theirPublicKey, text);
     }
+
+    static async decryptEvent(event: Event, secret:string|Uint8Array): Promise<Event> {   
+        try{
+            const kind = event.kind;
+            if(kind>=5000&&kind<6000){ // job request
+                const encryptedPayload = event.content;
+                const decryptedPayload = await nip04.decrypt(secret, event.pubkey, encryptedPayload);
+                const decryptedTags = JSON.parse(decryptedPayload);
+                event.tags.push(...decryptedTags);
+                event.content = "";
+            }else if(kind>=6000&&kind<=6999){ // job response
+                const encryptedPayload = event.content;
+                const decryptedPayload = await nip04.decrypt(secret, event.pubkey, encryptedPayload);
+                event.content = decryptedPayload;
+            }else if(kind == 7000){
+                const encryptedPayload = event.content;
+                const decryptedPayload = await nip04.decrypt(secret, event.pubkey, encryptedPayload);
+                event.content = decryptedPayload;
+            }
+    
+            // event.tags=event.tags.filter(t=>t[0]!="encrypted");
+        }catch(e){
+            console.error(e);
+        }
+        return event;
+    }
+
+
+    static async encryptEvent(event:Event, secret:string|Uint8Array):Promise<Event>{
+        const p = Utils.getTagVars(event, ["p"])[0][0];
+        if(!p){
+            console.warn("No public key found in event. Can't encrypt");
+            return event;
+        }
+
+        const encryptedTag = Utils.getTagVars(event, ["encrypted"])[0][0];
+      
+
+        const kind = event.kind;
+        if(kind>=5000&&kind<6000){ // job request
+            const tags = event.tags;
+            const tagsToEncrypt = [];
+            for(let i=0;i<tags.length;i++){
+                if(tags[i][0]=="i"){
+                    tagsToEncrypt.push(tags[i]);
+                    tags.splice(i,1);
+                    i--;
+                }
+            }
+            const encryptedTags = await nip04.encrypt(secret, p, JSON.stringify(tagsToEncrypt));
+            event.content = encryptedTags;
+        }else if(kind>=6000&&kind<=6999){ // job response
+            const encryptedPayload = await nip04.encrypt(secret, p, event.content||"");
+            event.content = encryptedPayload;
+        }else if(kind == 7000){
+            const encryptedPayload = await nip04.encrypt(secret, p, event.content||"");
+            event.content = encryptedPayload;
+        }
+
+        if(!encryptedTag){
+            event.tags.push(["encrypted", "true"]);
+        }
+        return event;
+
+    }
+
+
 
     static async getHyperdriveDiscoveryKey(secret:string|Uint8Array):Promise<string> {
         if (typeof secret == "string") {
@@ -111,18 +178,7 @@ export default class Utils {
         return await nip04.decrypt(secretKey, publicKey, encryptedUrl);
     }
 
-    static encrypt(v: string, secret: string): string {
-        const key = crypto.createHash("sha256").update(String(secret)).digest();
-        const cipher = crypto.createCipheriv("aes-256-ecb", key, null);
-        return cipher.update(v, "utf8", "hex") + cipher.final("hex");
-    }
-    static decrypt(v: string, secret: string): string {
-        const key = crypto.createHash("sha256").update(String(secret)).digest();
-        const decipher = crypto.createDecipheriv("aes-256-ecb", key, null);
-        let decrypted = decipher.update(v, "hex", "utf8");
-        decrypted += decipher.final("utf8");
-        return decrypted;
-    }
+  
     static uuidFrom(v: any): string {
         if (typeof v == "string") {
             return crypto

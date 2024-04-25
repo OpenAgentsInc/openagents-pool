@@ -53,6 +53,7 @@ async function main(){
         SERVER_KEY
     );
     await server.start();
+    console.log("Provider pubkey", PUBLIC_KEY);
 
 }
 
