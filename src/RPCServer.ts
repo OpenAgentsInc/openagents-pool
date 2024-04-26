@@ -610,6 +610,7 @@ export default class RPCServer {
     hyperdrivePool: HyperdrivePool;
     poolSecretKey: string;
     cache: Cache;
+    auth: Auth;
     constructor(
         poolSecretKey: string,
         addr: string,
@@ -617,6 +618,7 @@ export default class RPCServer {
         descriptorPath: string,
         nostrConnector: NostrConnector,
         hyperdrivePool: HyperdrivePool,
+        auth: Auth,
         cache: Cache,
         caCrt?: Buffer,
         serverCrt?: Buffer,
@@ -632,6 +634,7 @@ export default class RPCServer {
         this.hyperdrivePool = hyperdrivePool;
         this.cache = cache;
         this.poolSecretKey = poolSecretKey;
+        this.auth=auth;
     }
 
     async start() {
@@ -640,15 +643,15 @@ export default class RPCServer {
                 interceptors: [],
             });
 
-            server.addService(
-                ...Auth.adaptService(
-                    this.poolSecretKey,
-                    GPRCBackend.adaptService(
-                        PoolConnector,
-                        new RpcConnector(this.nostrConnector, this.hyperdrivePool, this.cache)
-                    )
-                )
+            let service = GPRCBackend.adaptService(
+                PoolConnector,
+                new RpcConnector(this.nostrConnector, this.hyperdrivePool, this.cache)
             );
+            if(this.auth){
+                service = this.auth.adaptNodeService(this.poolSecretKey, service);
+            }
+            
+            server.addService(...service);
 
             if (Fs.existsSync(this.descriptorPath)) {
                 const descriptorSetBuffer = Fs.readFileSync(this.descriptorPath);

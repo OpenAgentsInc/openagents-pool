@@ -20,6 +20,7 @@ import { JobInput, JobParam } from "openagents-grpc-proto";
 import Ws from "ws";
 import Node from "./Node";
 import WebHooks from "./WebHooks";
+import Auth from "./Auth";
 useWebSocketImplementation(Ws);
 
 type CustomSubscription = {
@@ -55,10 +56,12 @@ export default class NostrConnector {
     since: number;
     drives: Map<string, Array<Drive>> = new Map();
     webhooks: WebHooks | undefined;
+    auth: Auth;
 
     constructor(
         secretKey: string,
         relays: Array<string>,
+        auth: Auth,
         maxEventDuration: number = 1000 * 60 * 10,
         maxJobExecutionTime: number = 1000 * 60 * 5,
         announcementTimeout: number = 1000 * 60 * 5
@@ -74,6 +77,7 @@ export default class NostrConnector {
         this.maxEventDuration = maxEventDuration;
         this.maxJobExecutionTime = maxJobExecutionTime;
         this.since = Date.now() - maxEventDuration;
+        this.auth = auth;
         this._loop();
         this.pool.subscribeMany(
             this.relays,
@@ -98,6 +102,15 @@ export default class NostrConnector {
     async _onEvent(event: Event, local:boolean) {
          try {
             if (local)return;
+            if(this.auth){
+                if(event.pubkey!=this.pk){
+                    if(!this.auth.isEventAuthorized(event)){
+                        console.warn("Received event from an unauthorized source. Ignore", event);
+                        return;
+                    }
+
+                }
+            }
              const encrypted = Utils.getTagVars(event, ["encrypted"])[0][0];
              if (encrypted) {
                  const p = Utils.getTagVars(event, ["p"])[0][0];

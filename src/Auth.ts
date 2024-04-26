@@ -1,14 +1,17 @@
 import * as GRPC from "@grpc/grpc-js";
 import Utils from "./Utils";
-import { generateSecretKey, getPublicKey } from "nostr-tools";
+import { generateSecretKey, getPublicKey,Event } from "nostr-tools";
 export default class Auth {
 
-
-    static isAuthorized(methodName: string, nodeId: string): boolean {
+    async isEventAuthorized(event: Event): Promise<boolean> {
         return true;
     }
 
-    static adaptService(
+    async isNodeAuthorized(methodName: string, nodeId: string): Promise<boolean> {
+        return true;
+    }
+
+    adaptNodeService(
         poolSecretKey: string,
         data: [GRPC.ServiceDefinition, GRPC.UntypedServiceImplementation]): [GRPC.ServiceDefinition, GRPC.UntypedServiceImplementation]{
         let [def, impl] = data;
@@ -22,7 +25,7 @@ export default class Auth {
                        const id = Utils.uuidFrom(token);
                        call.metadata.set("nodeid", id);
                         call.metadata.set("cacheid", id);
-                       if (this.isAuthorized(methodName, id)) {
+                       if (this.isNodeAuthorized(methodName, id)) {
                            methodImplementation(call, callback);
                        } else {
                            callback({

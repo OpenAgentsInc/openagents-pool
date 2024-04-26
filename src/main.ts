@@ -7,6 +7,7 @@ import WebHooks from "./WebHooks";
 import HyperdrivePool from "./HyperdrivePool";
 import Cache from "./Cache";
 import Path from "path";
+import JsonAuth from "./auth/JsonAuth";
 async function main(){
     process.on("uncaughtException", (err) => {
         console.error("There was an uncaught error", err);
@@ -35,8 +36,18 @@ async function main(){
     
     const BLOB_STORAGE_PATH = Path.join((process.env.BLOB_STORAGE_PATH || "./data/hyperpool"),PUBLIC_KEY);
 
+    const AUTH_SERVICE =
+        process.env.AUTH_SERVICE ||
+        "json:https://gist.githubusercontent.com/riccardobl/6b05b2a6f5836b5e7954d9623c00c397/raw/oa-auth-test.json";
+
+    let auth = undefined;
+    if(AUTH_SERVICE.startsWith("json:")){
+        const baseUrl = AUTH_SERVICE.substring(5);
+        auth = new JsonAuth(baseUrl);
+    }
+
     const webhooks = new WebHooks(WEBHOOKS);
-    const nostr = new NostrConnector(SECRET_KEY, RELAYS, undefined);
+    const nostr = new NostrConnector(SECRET_KEY, RELAYS, auth);
     nostr.setWebHooks(webhooks);
     const hyp = new HyperdrivePool(BLOB_STORAGE_PATH, nostr);
     const cache = new Cache(BLOB_STORAGE_PATH, hyp, PUBLIC_KEY);
@@ -47,6 +58,7 @@ async function main(){
         DESCRIPTOR_PATH,
         nostr,
         hyp,
+        auth,
         cache,
         CA_CRT,
         SERVER_CRT,
