@@ -708,7 +708,7 @@ export default class NostrConnector {
             ],
             content: "",
         };
-
+        await deleteOlds; // avoid duplicate-url issue
         const submittedEvent = this.sendEvent(event, true);
         // await deleteOlds;
         return (await submittedEvent).id;
