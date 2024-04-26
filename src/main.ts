@@ -13,7 +13,14 @@ async function main(){
         console.error("There was an uncaught error", err);
     });
     process.on("unhandledRejection", (reason, promise) => {
-        console.error("Unhandled Rejection at:", promise, "reason:", reason);
+        let r=reason;
+        let m=reason;
+        if(reason instanceof Error){
+            r=reason.stack
+            m=reason.message;
+        }
+        console.error("Unhandled Rejection at:", promise, "reason:", r,m);
+    
     });
     const IP = process.env.GRPC_BINDING_ADDRESS || "0.0.0.0";
     const PORT = Number(process.env.GRPC_BINDING_PORT || 5000);
@@ -28,11 +35,11 @@ async function main(){
     const SERVER_KEY_PATH: string = process.env.GRPC_SERVER_KEY || "";
 
     const CA_CRT: Buffer | undefined =
-        CA_CRT_PATH && Fs.existsSync(CA_CRT_PATH) ? Fs.readFileSync(CA_CRT_PATH) : undefined;
+        CA_CRT_PATH ? Fs.readFileSync(CA_CRT_PATH) : undefined;
     const SERVER_CRT: Buffer | undefined =
-        SERVER_CRT_PATH && Fs.existsSync(SERVER_CRT_PATH) ? Fs.readFileSync(SERVER_CRT_PATH) : undefined;
+        SERVER_CRT_PATH  ? Fs.readFileSync(SERVER_CRT_PATH) : undefined;
     const SERVER_KEY: Buffer | undefined =
-        SERVER_KEY_PATH && Fs.existsSync(SERVER_KEY_PATH) ? Fs.readFileSync(SERVER_KEY_PATH) : undefined;
+        SERVER_KEY_PATH ? Fs.readFileSync(SERVER_KEY_PATH) : undefined;
     
     const BLOB_STORAGE_PATH = Path.join((process.env.BLOB_STORAGE_PATH || "./data/hyperpool"),PUBLIC_KEY);
 
