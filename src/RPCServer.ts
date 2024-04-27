@@ -201,7 +201,7 @@ class RpcConnector implements IPoolConnector {
                     throw e;
                 }
             }
-            await outputStream.flushAndWait();
+            if(outputStream)await outputStream.flushAndWait();
             return {
                 success: true,
             };
@@ -234,7 +234,7 @@ class RpcConnector implements IPoolConnector {
                     throw e;
                 }
             }
-            await outputStream.flushAndWait();
+            if(outputStream)await outputStream.flushAndWait();
             return {
                 success: true,
             };
@@ -641,11 +641,15 @@ export default class RPCServer {
         return new Promise((resolve, reject) => {
             const server = new GRPC.Server({
                 interceptors: [],
+                // 20 MB
+                "grpc.max_send_message_length": 20 * 1024 * 1024,
+                "grpc.max_receive_message_length": 20 * 1024 * 1024,
+                "grpc.max_concurrent_streams": 100,
             });
 
             let service = GPRCBackend.adaptService(
                 PoolConnector,
-                new RpcConnector(this.nostrConnector, this.hyperdrivePool, this.cache)
+                new RpcConnector(this.nostrConnector, this.hyperdrivePool, this.cache),
             );
             if(this.auth){
                 service = this.auth.adaptNodeService(this.poolSecretKey, service);

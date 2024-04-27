@@ -129,7 +129,7 @@ export class SharedDrive extends EventEmitter {
         for (const drive of this.drives) {
             if (await drive.exists(path)) return true;
         }
-        console.log("File not found", path);
+        // console.log("File not found", path);
         return false;
     }
 
@@ -222,7 +222,6 @@ export default class HyperdrivePool {
     swarm: Hyperswarm;
     discovery: any;
     nPeers: number = 0;
-    driverTimeout: number = 1000 * 60 * 60 * 1; // 1 hour
     isClosed: boolean = false;
     constructor(storagePath: string, conn: NostrConnector, topic: string = "OpenAgentsBlobStore") {
         this.store = new Corestore(storagePath, {

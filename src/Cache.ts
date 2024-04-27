@@ -14,7 +14,7 @@ export class CacheDisk {
 
     async getAsStream(path: string, requestedEntryVersion?:number): Promise<ReadableGreedy> {
         if (!(await this.drive.exists(path))) {
-            console.log("Cache miss", path);
+            // console.log("Cache miss", path);
             return undefined;
         }
 
@@ -97,17 +97,17 @@ export default class Cache {
 
     async get(name: string): Promise<CacheDisk> {
         if (this.CACHES[name]) {
-            console.log("Cache instance found");
+            // console.log("Cache instance found");
             return this.CACHES[name];
         }
 
         const bundleUrlPath = Path.join(this.cacheUrl, name + ".bundledcache");
         let bundleUrl = "";
         if (Fs.existsSync(bundleUrlPath)) {
-            console.log("Freezed cache instance found. Warming up...");
+            // console.log("Freezed cache instance found. Warming up...");
             bundleUrl = await Fs.promises.readFile(bundleUrlPath, { encoding: "utf-8" });
         } else {
-            console.log("Create new cache instance.");
+            // console.log("Create new cache instance.");
             bundleUrl = await this.drives.create(this.poolId);
             await Fs.promises.writeFile(bundleUrlPath, bundleUrl, { encoding: "utf-8" });
         }

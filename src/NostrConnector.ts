@@ -50,9 +50,8 @@ export default class NostrConnector {
 
     announcementTimeout: number;
     maxEventDuration: number;
-    minEventDuration: number = 1000 * 60 * 2;
+    minEventDuration: number ;
     maxJobExecutionTime: number;
-    minJobExecutionTime: number = 1000 * 60 * 1;
     since: number;
     drives: Map<string, Array<Drive>> = new Map();
     webhooks: WebHooks | undefined;
@@ -62,9 +61,10 @@ export default class NostrConnector {
         secretKey: string,
         relays: Array<string>,
         auth: Auth,
-        maxEventDuration: number = 1000 * 60 * 10,
-        maxJobExecutionTime: number = 1000 * 60 * 5,
-        announcementTimeout: number = 1000 * 60 * 5
+        maxEventDuration: number = 1000 * 60 * 60,
+        minEventDuration: number = 1000 * 60 * 15,
+        maxJobExecutionTime: number = 1000 * 60 * 15,
+        announcementTimeout: number = 1000 * 60 * 15
     ) {
         this.jobs = [];
         this.customSubscriptions = new Map();
@@ -76,6 +76,7 @@ export default class NostrConnector {
         this.announcementTimeout = announcementTimeout;
         this.maxEventDuration = maxEventDuration;
         this.maxJobExecutionTime = maxJobExecutionTime;
+        this.minEventDuration = minEventDuration;
         this.since = Date.now() - maxEventDuration;
         this.auth = auth;
         this._loop();
