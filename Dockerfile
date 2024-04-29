@@ -33,27 +33,27 @@ ENV POOL_WEBSITE=""
 ENV POOL_VERSION=""
 
 # Config for pool's grpc service
-ENV GRPC_BINDING_ADDRESS="0.0.0.0"
-ENV GRPC_BINDING_PORT=5000
+ENV POOL_GRPC_BINDING_ADDRESS="0.0.0.0"
+ENV POOL_GRPC_BINDING_PORT=5000
 # Path to GRPC proto descriptor file (used only for grpcui)
-ENV GRPC_PROTO_DESCRIPTOR_PATH = ""
+ENV POOL_GRPC_PROTO_DESCRIPTOR_PATH = ""
 # Only set GRPC_SERVER_CRT and GRPC_SERVER_KEY for public certificates
-ENV GRPC_CA_CRT="" 
-ENV GRPC_SERVER_CRT=""
-ENV GRPC_SERVER_KEY=""
+ENV POOL_GRPC_CA_CRT="" 
+ENV POOL_GRPC_SERVER_CRT=""
+ENV POOL_GRPC_SERVER_KEY=""
 
 # Pool secret key on Nostr (empty = autogenerate on startup)
-ENV NOSTR_SECRET_KEY="" 
+ENV POOL_NOSTR_SECRET_KEY="" 
 # Relays to connect to (comma separated)
 ENV NOSTR_RELAYS=""
 
 # Events webhook endpoints (csv, used to send json payloads to an external service)
-ENV EVENTS_WEBHOOK_ENDPOINTS=""
+ENV POOL_EVENTS_WEBHOOK_ENDPOINTS=""
 
 # Storage paths
-ENV BLOB_STORAGE_PATH="/blobs"
+ENV POOL_BLOB_STORAGE_PATH="/blobs"
 # unused
-ENV CACHE_PATH="/cache" 
+ENV POOL_CACHE_PATH="/cache" 
 
 # Used to authenticate nodes and clients
 ENV POOL_AUTH_SERVICE=""

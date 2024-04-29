@@ -30,39 +30,39 @@ async function main(){
     const POOL_WEBSITE = process.env.POOL_WEBSITE || "";
     const POOL_VERSION = process.env.POOL_VERSION || "0.1";
 
-    const GRPC_BINDING_ADDRESS = process.env.GRPC_BINDING_ADDRESS || "0.0.0.0";
-    const GRPC_BINDING_PORT = Number(process.env.GRPC_BINDING_PORT || 5000);
-    const GRPC_PROTO_DESCRIPTOR_PATH = process.env.GRPC_PROTO_DESCRIPTOR_PATH || "./docs/descriptor.pb";
+    const POOL_GRPC_BINDING_ADDRESS = process.env.POOL_GRPC_BINDING_ADDRESS || "0.0.0.0";
+    const POOL_GRPC_BINDING_PORT = Number(process.env.POOL_GRPC_BINDING_PORT || 5000);
+    const POOL_GRPC_PROTO_DESCRIPTOR_PATH = process.env.POOL_GRPC_PROTO_DESCRIPTOR_PATH || "./docs/descriptor.pb";
 
-    const GRPC_CA_CRT: string = process.env.GRPC_CA_CRT || "";
-    const GRPC_SERVER_CRT: string = process.env.GRPC_SERVER_CRT || "";
-    const GRPC_SERVER_KEY: string = process.env.GRPC_SERVER_KEY || "";
+    const POOL_GRPC_CA_CRT: string = process.env.POOL_GRPC_CA_CRT || "";
+    const POOL_GRPC_SERVER_CRT: string = process.env.POOL_GRPC_SERVER_CRT || "";
+    const POOL_GRPC_SERVER_KEY: string = process.env.POOL_GRPC_SERVER_KEY || "";
 
-    const NOSTR_SECRET_KEY = process.env.NOSTR_SECRET_KEY || bytesToHex(generateSecretKey());
+    const POOL_NOSTR_SECRET_KEY = process.env.POOL_NOSTR_SECRET_KEY || bytesToHex(generateSecretKey());
     const NOSTR_RELAYS = (process.env.NOSTR_RELAYS || "wss://nostr.openagents.com:7777").split(",");
 
-    const EVENTS_WEBHOOK_ENDPOINTS = (process.env.EVENTS_WEBHOOK_ENDPOINTS || "").split(",");
+    const POOL_EVENTS_WEBHOOK_ENDPOINTS = (process.env.POOL_EVENTS_WEBHOOK_ENDPOINTS || "").split(",");
 
     //////
-    const NOSTR_PUBLIC_KEY = getPublicKey(hexToBytes(NOSTR_SECRET_KEY));
-    const CA_CRT_DATA: Buffer | undefined = GRPC_CA_CRT ? Fs.readFileSync(GRPC_CA_CRT) : undefined;
-    const SERVER_CRT_DATA: Buffer | undefined = GRPC_SERVER_CRT
-        ? Fs.readFileSync(GRPC_SERVER_CRT)
+    const POOL_NOSTR_PUBLIC_KEY = getPublicKey(hexToBytes(POOL_NOSTR_SECRET_KEY));
+    const POOL_CA_CRT_DATA: Buffer | undefined = POOL_GRPC_CA_CRT ? Fs.readFileSync(POOL_GRPC_CA_CRT) : undefined;
+    const POOL_SERVER_CRT_DATA: Buffer | undefined = POOL_GRPC_SERVER_CRT
+        ? Fs.readFileSync(POOL_GRPC_SERVER_CRT)
         : undefined;
-    const SERVER_KEY_DATA: Buffer | undefined = GRPC_SERVER_KEY
-        ? Fs.readFileSync(GRPC_SERVER_KEY)
+    const POOL_SERVER_KEY_DATA: Buffer | undefined = POOL_GRPC_SERVER_KEY
+        ? Fs.readFileSync(POOL_GRPC_SERVER_KEY)
         : undefined;
     ////
 
 
-    const BLOB_STORAGE_PATH = Path.join(
-        process.env.BLOB_STORAGE_PATH || "./data/hyperpool",
-        NOSTR_PUBLIC_KEY
+    const POOL_BLOB_STORAGE_PATH = Path.join(
+        process.env.POOL_BLOB_STORAGE_PATH || "./data/hyperpool",
+        POOL_NOSTR_PUBLIC_KEY
     );
 
-    const CACHE_STORAGE_PATH = Path.join(
-        process.env.CACHE_PATH || "./data/cache",
-        NOSTR_PUBLIC_KEY
+    const POOL_CACHE_STORAGE_PATH = Path.join(
+        process.env.POOL_CACHE_PATH || "./data/cache",
+        POOL_NOSTR_PUBLIC_KEY
     );
 
     const POOL_AUTH_SERVICE =
@@ -109,26 +109,26 @@ async function main(){
         auth = new JsonAuth(baseUrl);
     }
 
-    const webhooks = new WebHooks(EVENTS_WEBHOOK_ENDPOINTS);
-    const nostr = new NostrConnector(NOSTR_SECRET_KEY, NOSTR_RELAYS, auth);
+    const webhooks = new WebHooks(POOL_EVENTS_WEBHOOK_ENDPOINTS);
+    const nostr = new NostrConnector(POOL_NOSTR_SECRET_KEY, NOSTR_RELAYS, auth);
     nostr.setWebHooks(webhooks);
-    const hyp = new HyperdrivePool(BLOB_STORAGE_PATH, nostr);
-    const cache = new Cache(BLOB_STORAGE_PATH, hyp, NOSTR_PUBLIC_KEY);
+    const hyp = new HyperdrivePool(POOL_BLOB_STORAGE_PATH, nostr);
+    const cache = new Cache(POOL_BLOB_STORAGE_PATH, hyp, POOL_NOSTR_PUBLIC_KEY);
     const server = new RPCServer(
-        NOSTR_SECRET_KEY,
-        GRPC_BINDING_ADDRESS,
-        GRPC_BINDING_PORT,
-        GRPC_PROTO_DESCRIPTOR_PATH,
+        POOL_NOSTR_SECRET_KEY,
+        POOL_GRPC_BINDING_ADDRESS,
+        POOL_GRPC_BINDING_PORT,
+        POOL_GRPC_PROTO_DESCRIPTOR_PATH,
         nostr,
         hyp,
         auth,
         cache,
-        CA_CRT_DATA,
-        SERVER_CRT_DATA,
-        SERVER_KEY_DATA
+        POOL_CA_CRT_DATA,
+        POOL_SERVER_CRT_DATA,
+        POOL_SERVER_KEY_DATA
     );
     await server.start();
-    Logger.get().info("Provider pubkey", NOSTR_PUBLIC_KEY);
+    Logger.get().info("Provider pubkey", POOL_NOSTR_PUBLIC_KEY);
 }
 
 main();
