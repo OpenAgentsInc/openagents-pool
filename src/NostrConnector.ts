@@ -81,25 +81,45 @@ export default class NostrConnector {
         this.minEventDuration = minEventDuration;
         this.since = Date.now() - maxEventDuration;
         this.auth = auth;
+        this.resub();
         this._loop();
-        this.pool.subscribeMany(
-            this.relays,
-            [
-                {
-                    // kinds: [5003, 6003, 7000], // TODO: is it better to add the range or keep it undefined?
-                    since: Math.floor(this.since / 1000),
-                },
-                {
-                    kinds: [1063],
-                    "#m": ["application/hyperdrive+bundle"],
-                },
-            ],
-            {
-                onevent: async (event) => {
-                    return this._onEvent(event, false);
-                },
+        
+    }
+
+    async resub(){
+        while(true){
+            try{
+                await this.pool.subscribeMany(
+                    this.relays,
+                    [
+                        {
+                            // kinds: [5003, 6003, 7000], // TODO: is it better to add the range or keep it undefined?
+                            since: Math.floor(this.since / 1000),
+                        },
+                        {
+                            kinds: [1063],
+                            "#m": ["application/hyperdrive+bundle"],
+                        },
+                    ],
+                    {
+                        onevent: async (event) => {
+                            return this._onEvent(event, false);
+                        },
+                        onclose: () => {
+                            try{
+                                this.resub();
+                            }catch(e){
+                                this.logger.error("Error resubscribing", e);
+                            }
+                        }
+                    }
+                );
+                break;
+            }catch(e){
+                this.logger.error("Error subscribing", e);
+                await new Promise((resolve) => setTimeout(resolve, 10000));
             }
-        );
+        }
     }
 
     async _onEvent(event: Event, local: boolean) {
