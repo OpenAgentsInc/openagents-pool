@@ -343,7 +343,7 @@ export default class NostrConnector {
                     event = finalizeEvent(unsignedEvent, this.sk);
                 }
             }
-            this.logger.log("Publishing event\n", event, "\n To", this.relays);
+            this.logger.fine("Publishing event\n", event, "\n To", this.relays);
             this.pool.publish(this.relays, event);
             await this._onEvent(event, true);
             return event;

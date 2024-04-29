@@ -654,7 +654,7 @@ export default class RPCServer {
                 // 20 MB
                 "grpc.max_send_message_length": 20 * 1024 * 1024,
                 "grpc.max_receive_message_length": 20 * 1024 * 1024,
-                "grpc.max_concurrent_streams": -1,
+                // "grpc.max_concurrent_streams": -1,
             });
 
             let service = GPRCBackend.adaptService(

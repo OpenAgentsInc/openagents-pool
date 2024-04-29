@@ -114,7 +114,7 @@ export default class Logger {
             if(lv=="error")return "error";
             if(lv=="warn")return "warn";
             if(lv=="info")return "info";
-            if (lv == "verbose") return "verbose";
+            if(lv == "verbose") return "verbose";
             if(lv=="debug")return "debug";
             if(lv=="fine")return "debug";
             else return "silly";
