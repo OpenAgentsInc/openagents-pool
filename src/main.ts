@@ -39,7 +39,7 @@ async function main(){
     const GRPC_SERVER_KEY: string = process.env.GRPC_SERVER_KEY || "";
 
     const NOSTR_SECRET_KEY = process.env.NOSTR_SECRET_KEY || bytesToHex(generateSecretKey());
-    const NOSTR_RELAYS = (process.env.NOSTR_RELAYS || "wss://nostr.rblb.it:7777").split(",");
+    const NOSTR_RELAYS = (process.env.NOSTR_RELAYS || "wss://nostr.openagents.com:7777").split(",");
 
     const EVENTS_WEBHOOK_ENDPOINTS = (process.env.EVENTS_WEBHOOK_ENDPOINTS || "").split(",");
 
