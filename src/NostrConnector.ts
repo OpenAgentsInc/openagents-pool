@@ -21,6 +21,7 @@ import Ws from "ws";
 import Node from "./Node";
 import WebHooks from "./WebHooks";
 import Auth from "./Auth";
+import Logger from "./Logger";
 useWebSocketImplementation(Ws);
 
 type CustomSubscription = {
@@ -40,6 +41,7 @@ type Drive = {
 }
 
 export default class NostrConnector {
+    logger = Logger.get(this.constructor.name);
     relays: Array<string>;
     pool: SimplePool;
     jobs: Array<Job>;
@@ -50,7 +52,7 @@ export default class NostrConnector {
 
     announcementTimeout: number;
     maxEventDuration: number;
-    minEventDuration: number ;
+    minEventDuration: number;
     maxJobExecutionTime: number;
     since: number;
     drives: Map<string, Array<Drive>> = new Map();
@@ -94,94 +96,93 @@ export default class NostrConnector {
             ],
             {
                 onevent: async (event) => {
-                   return this._onEvent(event, false);
+                    return this._onEvent(event, false);
                 },
             }
         );
     }
 
-    async _onEvent(event: Event, local:boolean) {
-         try {
-            if (local)return;
-            if(this.auth){
-                if(event.pubkey!=this.pk){
-                    if(!this.auth.isEventAuthorized(event)){
-                        console.warn("Received event from an unauthorized source. Ignore", event);
+    async _onEvent(event: Event, local: boolean) {
+        try {
+            if (local) return;
+            if (this.auth) {
+                if (event.pubkey != this.pk) {
+                    if (!this.auth.isEventAuthorized(event)) {
+                        this.logger.warn("Received event from an unauthorized source. Ignore", event);
                         return;
                     }
-
                 }
             }
-             const encrypted = Utils.getTagVars(event, ["encrypted"])[0][0];
-             if (encrypted) {
-                 const p = Utils.getTagVars(event, ["p"])[0][0];
-                 if (p && p == this.pk) {
-                    console.log("Received encrypted event", event,"Decrypting...");
-                     await Utils.decryptEvent(event, this.sk);
-                 }
-             }
+            const encrypted = Utils.getTagVars(event, ["encrypted"])[0][0];
+            if (encrypted) {
+                const p = Utils.getTagVars(event, ["p"])[0][0];
+                if (p && p == this.pk) {
+                    this.logger.log("Received encrypted event", event, "Decrypting...");
+                    await Utils.decryptEvent(event, this.sk);
+                }
+            }
 
-             this.callWebHooks("Event", event);
-             if (event.kind == 1063) {
-                 console.log("Discovered hyperdrive+bundle", event);
-                 const discoveryKey = Utils.getTagVars(event, ["x"])[0][0];
-                 if (!discoveryKey) {
-                     console.error("Event missing x tag");
-                     return;
-                 }
-                 let bundleDrives = this.drives.get(discoveryKey);
-                 if (!bundleDrives) {
-                     bundleDrives = [];
-                     this.drives.set(discoveryKey, bundleDrives);
-                 }
-                 const encryptedUrl = Utils.getTagVars(event, ["url"])[0][0];
-                 const nodeId = Utils.getTagVars(event, ["d"])[0][0];
-                 const version = Number(Utils.getTagVars(event, ["v"])[0][0] || 0);
-                 let append = true;
+            this.callWebHooks("Event", event);
+            if (event.kind == 1063) {
+                this.logger.finest("Discovered hyperdrive+bundle", event);
+                const discoveryKey = Utils.getTagVars(event, ["x"])[0][0];
+                if (!discoveryKey) {
+                    this.logger.error("Event missing x tag");
+                    return;
+                }
+                let bundleDrives = this.drives.get(discoveryKey);
+                if (!bundleDrives) {
+                    bundleDrives = [];
+                    this.drives.set(discoveryKey, bundleDrives);
+                }
+                const encryptedUrl = Utils.getTagVars(event, ["url"])[0][0];
+                const nodeId = Utils.getTagVars(event, ["d"])[0][0];
+                const version = Number(Utils.getTagVars(event, ["v"])[0][0] || 0);
+                let append = true;
 
-                 const foundDrive = bundleDrives.find((drive) => drive.encryptedUrl == encryptedUrl);
-                 if (!foundDrive) {
-                     append = true;
-                 } else if (foundDrive.version < version) {
-                     foundDrive.version = version;
-                     append = false;
-                 } else if (foundDrive.owner != nodeId) {
-                     append = true;
-                 } else {
-                     append = false;
-                 }
-                 if (append) {
-                     console.log("Appending drive", encryptedUrl);
-                     bundleDrives.push({
-                         encryptedUrl: encryptedUrl,
-                         discoveryKey: discoveryKey,
-                         owner: nodeId,
-                         version: version,
-                         url: "",
-                     });
-                 }
-             } else if (event.kind >= 5000 && event.kind <= 5999) {
-                 console.log("Received event", event);
-                 this.getJob("", event.id, true).then((job) => {
-                     if (!job) return;
-                     job.merge(event, this.relays);
-                     this.addExtraRelays(job.relays);
-                     this.callWebHooks("Job", job);
-                 });
-             } else if (event.kind >= 6000 && event.kind <= 7000) {
-                 console.log("Received event", event);
-                 const e: string = Utils.getTagVars(event, ["e"])[0][0];
-                 if (!e) throw new Error("Event missing e tag");
-                 this.getJob("", e, true).then((job) => {
-                     if (!job) return;
-                     job.merge(event, this.relays);
-                     this.addExtraRelays(job.relays);
-                     this.callWebHooks("Job", job);
-                 });
-             }
-         } catch (e) {
-             console.error("Error processing event" + JSON.stringify(event) + "\n" + e);
-         }
+                const foundDrive = bundleDrives.find((drive) => drive.encryptedUrl == encryptedUrl);
+                if (!foundDrive) {
+                    append = true;
+                } else if (foundDrive.version < version) {
+                    foundDrive.version = version;
+                    append = false;
+                } else if (foundDrive.owner != nodeId) {
+                    append = true;
+                } else {
+                    append = false;
+                }
+                if (append) {
+                    this.logger.finest("Appending drive", encryptedUrl);
+                    bundleDrives.push({
+                        encryptedUrl: encryptedUrl,
+                        discoveryKey: discoveryKey,
+                        owner: nodeId,
+                        version: version,
+                        url: "",
+                    });
+                }
+            } else if (event.kind >= 5000 && event.kind <= 5999) {
+                this.logger.finest("Received event", event);
+                this.getJob("", event.id, true).then((job) => {
+                    if (!job) return;
+                    job.merge(event, this.relays);
+                    this.addExtraRelays(job.relays);
+                    this.callWebHooks("Job", job);
+                });
+            } else if (event.kind >= 6000 && event.kind <= 7000) {
+                this.logger.log("Received event", event);
+                const e: string = Utils.getTagVars(event, ["e"])[0][0];
+                if (!e) throw new Error("Event missing e tag");
+                this.getJob("", e, true).then((job) => {
+                    if (!job) return;
+                    job.merge(event, this.relays);
+                    this.addExtraRelays(job.relays);
+                    this.callWebHooks("Job", job);
+                });
+            }
+        } catch (e) {
+            this.logger.error("Error processing event" + JSON.stringify(event) + "\n" + e);
+        }
     }
 
     setWebHooks(hooks: WebHooks) {
@@ -283,11 +284,11 @@ export default class NostrConnector {
     async addExtraRelays(relays: string[]) {
         for (const relay of relays) {
             try {
-                console.log("Ensure connection to", relay);
+                this.logger.log("Ensure connection to", relay);
                 await this.pool.ensureRelay(relay);
                 if (this.relays.indexOf(relay) === -1) this.relays.push(relay);
             } catch (e) {
-                console.error("Error connecting to relay", relay, e);
+                this.logger.error("Error connecting to relay", relay, e);
             }
         }
     }
@@ -300,7 +301,7 @@ export default class NostrConnector {
         ev: string | Event | UnsignedEvent | EventTemplate,
         sign: boolean = true
     ): Promise<Event> {
-        try{
+        try {
             let event: VerifiedEvent;
             if (typeof ev === "string") {
                 event = JSON.parse(ev);
@@ -308,55 +309,53 @@ export default class NostrConnector {
                 if ((ev as Event)[verifiedSymbol]) {
                     event = ev as VerifiedEvent;
                 } else {
-                    
                     if (!sign) {
                         throw new Error("Event must be signed");
                     }
                     const unsignedEvent = ev as Event;
                     const encrypted = Utils.getTagVars(unsignedEvent, ["encrypted"])[0][0];
-                    if(encrypted){
+                    if (encrypted) {
                         const p = Utils.getTagVars(unsignedEvent, ["p"])[0][0];
-                        if(p){
+                        if (p) {
                             await Utils.encryptEvent(unsignedEvent, this.sk);
                         }
                     }
                     event = finalizeEvent(unsignedEvent, this.sk);
                 }
             }
-            console.log("Publishing event\n", event, "\n To", this.relays);
+            this.logger.log("Publishing event\n", event, "\n To", this.relays);
             this.pool.publish(this.relays, event);
             await this._onEvent(event, true);
             return event;
-        }catch(e){
-            console.error("Error sending event", e);
+        } catch (e) {
+            this.logger.error("Error sending event", e);
             throw e;
         }
-
     }
 
     async _loop() {
         try {
             await this.evictExpired();
         } catch (e) {
-            console.error("Error looping", e);
+            this.logger.error("Error looping", e);
         }
 
         for (const node of this.nodes) {
             try {
                 if (!node.isUpdateNeeded()) continue;
                 const events = await node.toEvent(this.sk);
-                console.log("Announce node\n", JSON.stringify(events, null, 2), "\n");
+                this.logger.log("Announce node\n", JSON.stringify(events, null, 2), "\n");
                 for (const event of events) this.sendEvent(event);
                 node.clearUpdateNeeded();
             } catch (e) {
-                console.error("Error reannuncing nodes", e);
+                this.logger.error("Error reannuncing nodes", e);
             }
         }
 
         try {
             this.nodes = this.nodes.filter((node) => !node.isExpired());
         } catch (e) {
-            console.error("Error filtering nodes", e);
+            this.logger.error("Error filtering nodes", e);
         }
         setTimeout(() => this._loop(), 1000);
     }
@@ -368,11 +367,11 @@ export default class NostrConnector {
             try {
                 await this.closeAllCustomSubscriptions(job.id);
             } catch (e) {
-                console.error("Error closing custom subscriptions", e);
+                this.logger.error("Error closing custom subscriptions", e);
             }
         }
         this.jobs = this.jobs.filter((job) => expiredJobs.indexOf(job) === -1);
-        if (nJobs != this.jobs.length) console.log("Evicted", nJobs - this.jobs.length, "jobs");
+        if (nJobs != this.jobs.length) this.logger.log("Evicted", nJobs - this.jobs.length, "jobs");
     }
 
     async _resolveJobInputs(nodeId: string, job: Job) {
@@ -413,7 +412,7 @@ export default class NostrConnector {
             if (!job.isAvailable() && isAvailable) {
                 continue;
             }
-            if (excludeIds&&excludeIds.includes(job.id)) {
+            if (excludeIds && excludeIds.includes(job.id)) {
                 continue;
             }
             if (
@@ -449,8 +448,6 @@ export default class NostrConnector {
         return job;
     }
 
-    
-
     async acceptJob(nodeId: string, id: string) {
         const job = await this.getJob(nodeId, id);
         if (!job) {
@@ -478,7 +475,7 @@ export default class NostrConnector {
         if (job.isAvailable()) {
             throw new Error("Job not assigned");
         }
-        const eventQueue: EventTemplate[] = await job.cancel(nodeId, this.pk,  reason);
+        const eventQueue: EventTemplate[] = await job.cancel(nodeId, this.pk, reason);
         await Promise.all(eventQueue.map((event) => this.sendEvent(event)));
         this.closeAllCustomSubscriptions(id);
 
@@ -554,18 +551,18 @@ export default class NostrConnector {
             provider,
             encrypted
         );
-        console.log("Received job request", job);
+        this.logger.log("Received job request", job);
         const events: Array<EventTemplate> = await job.toRequest();
-        // waitList.push(events.map((event) => this.sendEvent(event)));        
+        // waitList.push(events.map((event) => this.sendEvent(event)));
         // const finalizedEvents = await Promise.all(waitList);
-        for(const event of events){
-            const f=await this.sendEvent(event);
-            if(f&&!job.id){
-                job.id=f.id;
+        for (const event of events) {
+            const f = await this.sendEvent(event);
+            if (f && !job.id) {
+                job.id = f.id;
             }
         }
-        
-        console.log("Job request sent", job);
+
+        this.logger.log("Job request sent", job);
         return job;
     }
 
@@ -693,7 +690,7 @@ export default class NostrConnector {
                     .map((event) => event.id)
             );
         } catch (e) {
-            console.error("Error deleting old announcements", e);
+            this.logger.error("Error deleting old announcements", e);
             deleteOlds = Promise.resolve();
         }
 

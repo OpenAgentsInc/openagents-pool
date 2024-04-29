@@ -3,9 +3,11 @@ import { SharedDrive } from "./HyperdrivePool";
 import Path from "path";
 import Fs from "fs";
 import Utils from "./Utils";
+import Logger from "./Logger";
 export class CacheDisk {
     drive: SharedDrive;
     version: number;
+    logger=Logger.get(this.constructor.name);
     constructor(drive: SharedDrive, cacheVersion: number) {
         this.drive = drive;
         this.version = cacheVersion ;
@@ -22,7 +24,7 @@ export class CacheDisk {
         
 
         if (meta.cacheVersion != this.version) {
-            console.log(
+            this.logger.log(
                 "Cache version mismatch",
                 path,
                 "current:",
@@ -34,7 +36,7 @@ export class CacheDisk {
         }
 
         if (requestedEntryVersion && requestedEntryVersion != meta.entryVersion) {
-            console.log(
+            this.logger.log(
                 "Entry version mismatch",
                 path,
                 "requested:",
@@ -46,7 +48,7 @@ export class CacheDisk {
         }
 
         if (meta.expiration && meta.expiration < Date.now()) {
-            console.log("Expired cache", path, "expiration:", meta.expiration, "now:", Date.now());
+            this.logger.log("Expired cache", path, "expiration:", meta.expiration, "now:", Date.now());
             return undefined;
         }
 

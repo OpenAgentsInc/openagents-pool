@@ -13,7 +13,7 @@ import { generateSecretKey } from "nostr-tools";
 import Fs from "fs";
 import Path from "path";
 import { EventEmitter } from "events";
-
+import Logger from "./Logger";
 import { hexToBytes, bytesToHex } from "@noble/hashes/utils";
 export type DriverOut = {
     flushAndWait:()=>Promise<void>
@@ -21,6 +21,7 @@ export type DriverOut = {
 };
 export type ReadableGreedy = Readable & {readAll:()=>Promise<Buffer>};
 export class SharedDrive extends EventEmitter {
+    logger = Logger.get(this.constructor.name);
     drives: Hyperdrive[] = [];
     bundleUrl: string;
     lastAccess: number;
@@ -76,7 +77,7 @@ export class SharedDrive extends EventEmitter {
         let data = undefined;
         for (const drive of this.drives) {
             if (await drive.exists(path)) {
-                console.log("Found file ",path," in drive", drive.key.toString("hex"));
+                this.logger.log("Found file ",path," in drive", drive.key.toString("hex"));
                 data = drive.get(path);
             }
         }
@@ -186,7 +187,7 @@ export class SharedDrive extends EventEmitter {
         try {
             await this.conn.unannounceHyperdrive(this.bundleUrl);
         } catch (e) {
-            console.log("Error unannouncing", e);
+            this.logger.log("Error unannouncing", e);
         }
         for (const drive of this.drives) {
             await drive.close();
@@ -198,12 +199,12 @@ export class SharedDrive extends EventEmitter {
         this.lastAccess = Date.now();
         for (const drive of this.drives) {
             if (!drive._instanceLocal) {
-                console.log("Skip commit of remote drive", drive.key.toString("hex"));
+                this.logger.log("Skip commit of remote drive", drive.key.toString("hex"));
                 continue;
             }
             const version = drive.version;
             const diskUrl = "hyperdrive://" + drive.key.toString("hex");
-            console.log("Commit local clone", diskUrl);
+            this.logger.log("Commit local clone", diskUrl);
             await this.conn.announceHyperdrive(drive._instanceOwner, this.bundleUrl, diskUrl, version);
         }
         // for (const drive of this.drives) {
@@ -214,6 +215,8 @@ export class SharedDrive extends EventEmitter {
 }
 
 export default class HyperdrivePool {
+    logger = Logger.get(this.constructor.name);
+
     storagePath: string;
     secretKey: string;
     store: Corestore;
@@ -232,12 +235,12 @@ export default class HyperdrivePool {
         this.swarm = new Hyperswarm();
         this.swarm.on("connection", (conn) => {
             const name = b4a.toString(conn.remotePublicKey, "hex");
-            console.log("* got a connection from:", name, "*");
-            conn.on("error", (e) => console.log(`Connection error: ${e}`));
+            this.logger.finer("* got a connection from:", name, "*");
+            conn.on("error", (e) => this.logger.log(`Connection error: ${e}`));
             this.store.replicate(conn);
             this.nPeers++;
             conn.once("close", () => {
-                console.log("* connection closed from:", name, "*");
+                this.logger.log("* connection closed from:", name, "*");
                 this.nPeers--;
             });
         });
@@ -298,7 +301,7 @@ export default class HyperdrivePool {
     async create(
         owner: string,
         encryptionKey?: string,
-        includeEncryptionKeyInUrl: boolean = false,
+        includeEncryptionKeyInUrl: boolean = false
     ): Promise<string> {
         // await this.discovery.flushed();
 
@@ -317,8 +320,6 @@ export default class HyperdrivePool {
         });
         await drive.ready();
 
-
-
         this.drives[bundleUrl] = new SharedDrive(bundleUrl, this.conn);
         this.drives[bundleUrl].addDrive(drive, owner, true);
 
@@ -329,18 +330,18 @@ export default class HyperdrivePool {
         return bundleUrl;
     }
 
-    async open(owner: string, bundleUrl: string, encryptionKey?: string): Promise<[string,number]> {
+    async open(owner: string, bundleUrl: string, encryptionKey?: string): Promise<[string, number]> {
         if (!bundleUrl.startsWith("hyperdrive+bundle://")) {
             bundleUrl = "hyperdrive+bundle://" + bundleUrl;
         }
-        
+
         // await this.discovery.flushed();
         const bundleData = this.parseHyperUrl(bundleUrl, encryptionKey);
 
         const corestore = this.store.namespace(bundleUrl.replace(/[^a-zA-Z0-9]/g, "_"));
         let sharedDrive = this.drives[bundleUrl];
         if (!sharedDrive) {
-            console.log("Create local disk", bundleUrl);
+            this.logger.log("Create local disk", bundleUrl);
             const drive = new Hyperdrive(corestore, {
                 encryptionKey: bundleData.encryptionKey
                     ? b4a.from(bundleData.encryptionKey, "hex")
@@ -354,12 +355,12 @@ export default class HyperdrivePool {
         }
 
         let drives;
-        
-        drives = await this.conn.findAnnouncedHyperdrives(bundleUrl);      
-        console.log("Found", drives, "remote disks");
-        
+
+        drives = await this.conn.findAnnouncedHyperdrives(bundleUrl);
+        this.logger.log("Found", drives, "remote disks");
+
         let connectedRemoteDrivers = false;
-        const waitList=[];
+        const waitList = [];
         for (const drive of drives) {
             const driverData = this.parseHyperUrl(drive.url, bundleData.encryptionKey);
             if (!sharedDrive.hasDrive(driverData.key)) {
@@ -368,23 +369,25 @@ export default class HyperdrivePool {
                         ? b4a.from(driverData.encryptionKey, "hex")
                         : undefined,
                 });
-                waitList.push((async () => {
-                    await hd.ready();
-                    hd = await hd.checkout(Number(drive.version));
-                    await hd.ready();
-                    sharedDrive.addDrive(hd, drive.owner);
-                })());
+                waitList.push(
+                    (async () => {
+                        await hd.ready();
+                        hd = await hd.checkout(Number(drive.version));
+                        await hd.ready();
+                        sharedDrive.addDrive(hd, drive.owner);
+                    })()
+                );
                 connectedRemoteDrivers = true;
-                console.log("Connected to remote disk", drive.url);
+                this.logger.log("Connected to remote disk", drive.url);
             } else {
-                console.log("Already connected to remote disk", drive.url);
+                this.logger.log("Already connected to remote disk", drive.url);
             }
         }
-        if (waitList.length>0) await Promise.all(waitList);
+        if (waitList.length > 0) await Promise.all(waitList);
 
         if (connectedRemoteDrivers) {
             // wait for at least 1 peer to be online
-            console.log("Waiting for peers...");
+            this.logger.log("Waiting for peers...");
             while (true) {
                 if (this.nPeers < 1) {
                     await this.discovery.refresh({
@@ -393,18 +396,18 @@ export default class HyperdrivePool {
                     });
                     await new Promise((resolve) => setTimeout(resolve, 100));
                 } else {
-                    console.log("Connected to", this.nPeers, "peers");
+                    this.logger.log("Connected to", this.nPeers, "peers");
                     break;
                 }
             }
         }
         sharedDrive.lastAccess = Date.now();
-        return [bundleUrl,await sharedDrive.getVersion()];
+        return [bundleUrl, await sharedDrive.getVersion()];
     }
 
     async get(owner: string, bundleUrl: string): Promise<SharedDrive> {
         let sharedDriver = this.drives[bundleUrl];
-        if(!sharedDriver) {
+        if (!sharedDriver) {
             bundleUrl = (await this.open(owner, bundleUrl))[0];
             sharedDriver = this.drives[bundleUrl];
         }
@@ -417,6 +420,4 @@ export default class HyperdrivePool {
         if (!sharedDriver) return;
         await sharedDriver.commit();
     }
-
-    
 }

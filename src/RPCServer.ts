@@ -66,8 +66,10 @@ import Fs from 'fs';
 import HyperdrivePool, { SharedDrive } from "./HyperdrivePool";
 import {DriverOut} from "./HyperdrivePool";
 import Cache, { CacheDisk } from "./Cache";
+import Logger from "./Logger";
 
 class RpcConnector implements IPoolConnector {
+    logger = Logger.get(this.constructor.name);
     conn: NostrConnector;
     hyp: HyperdrivePool;
     cache: Cache;
@@ -92,7 +94,7 @@ class RpcConnector implements IPoolConnector {
                 url,
             };
         } catch (e) {
-            console.log(e);
+            this.logger.error(e);
             throw e;
         }
     }
@@ -106,7 +108,7 @@ class RpcConnector implements IPoolConnector {
                 version: version,
             };
         } catch (e) {
-            console.log(e);
+            this.logger.error(e);
             throw e;
         }
     }
@@ -119,7 +121,7 @@ class RpcConnector implements IPoolConnector {
                 success: true,
             };
         } catch (e) {
-            console.log(e);
+            this.logger.error(e);
             throw e;
         }
     }
@@ -136,7 +138,7 @@ class RpcConnector implements IPoolConnector {
                 success: true,
             };
         } catch (e) {
-            console.log(e);
+            this.logger.error(e);
             throw e;
         }
     }
@@ -153,7 +155,7 @@ class RpcConnector implements IPoolConnector {
                 files,
             };
         } catch (e) {
-            console.log(e);
+            this.logger.error(e);
             throw e;
         }
     }
@@ -172,7 +174,7 @@ class RpcConnector implements IPoolConnector {
             }
             await responses.complete();
         } catch (e) {
-            console.log(e);
+            this.logger.error(e);
             throw e;
         }
     }
@@ -197,16 +199,16 @@ class RpcConnector implements IPoolConnector {
                     }
                     await outputStream.write(request.data);
                 } catch (e) {
-                    console.log(e);
+                    this.logger.error(e);
                     throw e;
                 }
             }
-            if(outputStream)await outputStream.flushAndWait();
+            if (outputStream) await outputStream.flushAndWait();
             return {
                 success: true,
             };
         } catch (e) {
-            console.log(e);
+           this.logger.error(e);
             throw e;
         }
     }
@@ -230,16 +232,16 @@ class RpcConnector implements IPoolConnector {
                     }
                     await outputStream.write(request.data);
                 } catch (e) {
-                    console.log(e);
+                    this.logger.error(e);
                     throw e;
                 }
             }
-            if(outputStream)await outputStream.flushAndWait();
+            if (outputStream) await outputStream.flushAndWait();
             return {
                 success: true,
             };
         } catch (e) {
-            console.log(e);
+           this.logger.error(e);
             throw e;
         }
     }
@@ -263,7 +265,7 @@ class RpcConnector implements IPoolConnector {
                 await responses.complete();
             }
         } catch (e) {
-            console.log(e);
+            this.logger.error(e);
             throw e;
         }
     }
@@ -280,7 +282,7 @@ class RpcConnector implements IPoolConnector {
                 success: true,
             };
         } catch (e) {
-            console.log(e);
+            this.logger.error(e);
             throw e;
         }
     }
@@ -298,7 +300,7 @@ class RpcConnector implements IPoolConnector {
                 exists: true,
             };
         } catch (e) {
-            console.log(e);
+            this.logger.error(e);
             throw e;
         }
     }
@@ -321,21 +323,23 @@ class RpcConnector implements IPoolConnector {
                 job = await Utils.busyWaitForSomething(
                     async () => {
                         try {
-                            job = await this.conn.getJob(nodeId, id);    
-                            const isDone = job && job.state.status == JobStatus.SUCCESS && job.result.timestamp;
+                            job = await this.conn.getJob(nodeId, id);
+                            const isDone =
+                                job && job.state.status == JobStatus.SUCCESS && job.result.timestamp;
                             if (isDone) return job;
                         } catch (e) {}
                         return undefined;
-                    }, () => {
+                    },
+                    () => {
                         return job; // return last fetched job
                     },
                     request.wait
                 );
-            } 
-            if(!job) job = await this.conn.getJob(nodeId, id);    
+            }
+            if (!job) job = await this.conn.getJob(nodeId, id);
             return job;
         } catch (e) {
-            console.log(e);
+            this.logger.error(e);
             throw e;
         }
     }
@@ -348,9 +352,9 @@ class RpcConnector implements IPoolConnector {
             const runOnFilter: RegExp = new RegExp(request.filterByRunOn || ".*");
             const descriptionFilter: RegExp = new RegExp(request.filterByDescription || ".*");
             const kindFilter: RegExp = new RegExp(request.filterByKind || ".*");
-            const excludeIds : string[] = request.excludeId || [];
+            const excludeIds: string[] = request.excludeId || [];
 
-            const findJobs=async ()=>{
+            const findJobs = async () => {
                 return await this.conn.findJobs(
                     nodeId,
                     jobIdFilter,
@@ -364,23 +368,25 @@ class RpcConnector implements IPoolConnector {
             };
 
             let jobs = [];
-            if(request.wait){
-                jobs=await Utils.busyWaitForSomething(async ()=>{
-                    const j = await findJobs();
-                    if(j.length>0)return j;
-                },()=>{
-                    return [];
-                },request.wait);
-            }else[
-                jobs=await findJobs()
-            ]
+            if (request.wait) {
+                jobs = await Utils.busyWaitForSomething(
+                    async () => {
+                        const j = await findJobs();
+                        if (j.length > 0) return j;
+                    },
+                    () => {
+                        return [];
+                    },
+                    request.wait
+                );
+            } else [(jobs = await findJobs())];
 
             const pendingJobs: PendingJobs = {
                 jobs,
             };
             return pendingJobs;
         } catch (e) {
-            console.log(e);
+            this.logger.error(e);
             throw e;
         }
     }
@@ -388,29 +394,32 @@ class RpcConnector implements IPoolConnector {
     async isJobDone(request: RpcGetJob, context: ServerCallContext): Promise<RpcIsJobDone> {
         try {
             const nodeId = this.getNodeId(context);
-            let isDone=false
-            if(request.wait){
-                isDone=await Utils.busyWaitForSomething(async ()=>{
-                    try{
-                        const job = await this.getJob(request, context);
-                        const isDone=job && job.state.status == JobStatus.SUCCESS &&job.result.timestamp;
-                        if(isDone)return true;
-                    }catch(e){
-                    }
-                    return undefined;
-                },()=>{
-                    return false;
-                },request.wait);
-            }else{
+            let isDone = false;
+            if (request.wait) {
+                isDone = await Utils.busyWaitForSomething(
+                    async () => {
+                        try {
+                            const job = await this.getJob(request, context);
+                            const isDone =
+                                job && job.state.status == JobStatus.SUCCESS && job.result.timestamp;
+                            if (isDone) return true;
+                        } catch (e) {}
+                        return undefined;
+                    },
+                    () => {
+                        return false;
+                    },
+                    request.wait
+                );
+            } else {
                 const job = await this.getJob(request, context);
-                isDone=job && job.state.status == JobStatus.SUCCESS && job.result.timestamp>0;
-            }            
+                isDone = job && job.state.status == JobStatus.SUCCESS && job.result.timestamp > 0;
+            }
             return {
-                isDone
+                isDone,
             };
-           
         } catch (e) {
-            console.log(e);
+            this.logger.error(e);
             throw e;
         }
     }
@@ -420,7 +429,7 @@ class RpcConnector implements IPoolConnector {
             const nodeId = this.getNodeId(context);
             return this.conn.acceptJob(nodeId, request.jobId);
         } catch (e) {
-            console.log(e);
+            this.logger.error(e);
             throw e;
         }
     }
@@ -430,7 +439,7 @@ class RpcConnector implements IPoolConnector {
             const nodeId = this.getNodeId(context);
             return this.conn.cancelJob(nodeId, request.jobId, request.reason);
         } catch (e) {
-            console.log(e);
+            this.logger.error(e);
             throw e;
         }
     }
@@ -440,7 +449,7 @@ class RpcConnector implements IPoolConnector {
             const nodeId = this.getNodeId(context);
             return this.conn.outputForJob(nodeId, request.jobId, request.output);
         } catch (e) {
-            console.log(e);
+            this.logger.error(e);
             throw e;
         }
     }
@@ -450,7 +459,7 @@ class RpcConnector implements IPoolConnector {
             const nodeId = this.getNodeId(context);
             return this.conn.completeJob(nodeId, request.jobId, request.output);
         } catch (e) {
-            console.log(e);
+            this.logger.error(e);
             throw e;
         }
     }
@@ -460,7 +469,7 @@ class RpcConnector implements IPoolConnector {
             const nodeId = this.getNodeId(context);
             return this.conn.logForJob(nodeId, request.jobId, request.log);
         } catch (e) {
-            console.log(e);
+            this.logger.error(e);
             throw e;
         }
     }
@@ -481,7 +490,7 @@ class RpcConnector implements IPoolConnector {
                 request.encrypted
             );
         } catch (e) {
-            console.log(e);
+            this.logger.error(e);
             throw e;
         }
     }
@@ -498,7 +507,7 @@ class RpcConnector implements IPoolConnector {
                 success: true,
             } as RpcSendSignedEventResponse;
         } catch (e) {
-            console.log(e);
+            this.logger.error(e);
             throw e;
         }
     }
@@ -515,7 +524,7 @@ class RpcConnector implements IPoolConnector {
                 subscriptionId: subId,
             };
         } catch (e) {
-            console.log(e);
+            this.logger.error(e);
             throw e;
         }
     }
@@ -535,7 +544,7 @@ class RpcConnector implements IPoolConnector {
                 events,
             };
         } catch (e) {
-            console.log(e);
+            this.logger.error(e);
             throw e;
         }
     }
@@ -551,7 +560,7 @@ class RpcConnector implements IPoolConnector {
                 success: true,
             };
         } catch (e) {
-            console.log(e);
+            this.logger.error(e);
             throw e;
         }
     }
@@ -573,7 +582,7 @@ class RpcConnector implements IPoolConnector {
                 refreshInterval: timeout,
             };
         } catch (e) {
-            console.log(e);
+            this.logger.error(e);
             throw e;
         }
     }
@@ -592,7 +601,7 @@ class RpcConnector implements IPoolConnector {
                 refreshInterval: timeout,
             };
         } catch (e) {
-            console.log(e);
+            this.logger.error(e);
             throw e;
         }
     }
@@ -600,6 +609,7 @@ class RpcConnector implements IPoolConnector {
 
 
 export default class RPCServer {
+    logger = Logger.get(this.constructor.name);
     addr: string;
     port: number;
     descriptorPath: string;
@@ -634,7 +644,7 @@ export default class RPCServer {
         this.hyperdrivePool = hyperdrivePool;
         this.cache = cache;
         this.poolSecretKey = poolSecretKey;
-        this.auth=auth;
+        this.auth = auth;
     }
 
     async start() {
@@ -649,12 +659,12 @@ export default class RPCServer {
 
             let service = GPRCBackend.adaptService(
                 PoolConnector,
-                new RpcConnector(this.nostrConnector, this.hyperdrivePool, this.cache),
+                new RpcConnector(this.nostrConnector, this.hyperdrivePool, this.cache)
             );
-            if(this.auth){
+            if (this.auth) {
                 service = this.auth.adaptNodeService(this.poolSecretKey, service);
             }
-            
+
             server.addService(...service);
 
             if (Fs.existsSync(this.descriptorPath)) {
@@ -664,8 +674,8 @@ export default class RPCServer {
                 reflection.addToServer(server);
             }
             const useSecure = this.caCrt || this.serverCrt || this.serverKey;
-            if(useSecure){
-                console.log("Using secure connection");
+            if (useSecure) {
+                this.logger.log("Using secure connection");
             }
             server.bindAsync(
                 `${this.addr}:${this.port}`,
@@ -684,10 +694,10 @@ export default class RPCServer {
                 (err: Error | null, port: number) => {
                     if (err) {
                         reject(err);
-                        console.log(`Server error: ${err.message}`);
+                        this.logger.error(`Server error: ${err.message}`);
                     } else {
                         resolve(true);
-                        console.log(`Server bound on port: ${port}`);
+                        this.logger.log(`Server bound on port: ${port}`);
                     }
                 }
             );

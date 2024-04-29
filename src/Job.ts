@@ -13,11 +13,14 @@ import {
     getPublicKey,
 } from "nostr-tools";
 
+import Logger from "./Logger";
+
 /**
  * A convenient abstraction over job events and handling
  *
  */
 export default class Job implements _Job {
+    logger = Logger.get(this.constructor.name);
     id: string = "";
     kind: number = 5003;
     runOn: string = "";
@@ -106,13 +109,13 @@ export default class Job implements _Job {
         if (event.kind >= 5000 && event.kind <= 5999) {
             // request
             const id = event.id;
-            
+
             const provider: string = Utils.getTagVars(event, ["p"])[0][0];
             if (this.provider && provider && provider != this.provider) {
-                console.error("Invalid provider");
+                this.logger.error("Invalid provider");
                 return;
             }
-            
+
             const kind: number = event.kind;
             const runOn: string = Utils.getTagVars(event, ["param", "run-on"])[0][0] || "generic";
             const customerPublicKey: string = event.pubkey;
@@ -180,7 +183,7 @@ export default class Job implements _Job {
             this.timestamp = timestamp;
             this.customerPublicKey = customerPublicKey;
             this.description = description;
-            this.encrypted=encrypted;
+            this.encrypted = encrypted;
 
             this.relays = [];
             this.outputFormat = expectedOutputFormat;
@@ -194,7 +197,6 @@ export default class Job implements _Job {
                 }
             }
         } else if (event.kind == 7000 || (event.kind >= 6000 && event.kind <= 6999)) {
-            
             const e: Array<string> = Utils.getTagVars(event, ["e"])[0];
             const jobId: string = e[0];
             if (!jobId) throw new Error("No job id");
@@ -205,7 +207,7 @@ export default class Job implements _Job {
 
             const provider: string = event.pubkey;
             if (this.provider && provider != this.provider) {
-                console.error("Invalid provider");
+                this.logger.error("Invalid provider");
                 return;
             }
             const content: string = event.content;
@@ -323,7 +325,7 @@ export default class Job implements _Job {
                 this.encrypted ? ["encrypted", "true"] : undefined,
             ].filter((t) => t),
         };
-        
+
         return [feedbackEvent];
     }
 
@@ -347,7 +349,7 @@ export default class Job implements _Job {
                 this.encrypted ? ["encrypted", "true"] : undefined,
             ].filter((t) => t),
         };
-        
+
         return [feedbackEvent];
     }
 
@@ -411,8 +413,8 @@ export default class Job implements _Job {
                 this.encrypted ? ["encrypted", "true"] : undefined,
             ].filter((t) => t),
         };
-      
-            return [feedbackEvent];
+
+        return [feedbackEvent];
     }
 
     async resolveInputs(resolver: (ref: string, type: string) => Promise<string | undefined>): Promise<void> {

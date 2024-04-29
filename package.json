@@ -38,6 +38,8 @@
         "ts-node": "^10.9.2",
         "ts-protoc-gen": "^0.15.0",
         "uuidv4": "^6.2.13",
+        "winston": "^3.13.0",
+        "winston-transport": "^4.7.0",
         "ws": "^8.16.0"
     },
     "devDependencies": {

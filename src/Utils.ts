@@ -2,19 +2,26 @@ import { Event, nip04, getPublicKey } from "nostr-tools";
 import { uuid as uuidv4 } from "uuidv4";
 import crypto from "crypto";
 import { hexToBytes, bytesToHex } from "@noble/hashes/utils";
-
+import Logger from "./Logger";
 export default class Utils {
+    
+
     static newUUID() {
         return uuidv4();
     }
 
-    static async busyWaitForSomething(cb: ()=>any,onTimeoutResultGenerator: ()=>any,maxMs: number=10000, sleep: number=21): Promise<any> {
+    static async busyWaitForSomething(
+        cb: () => any,
+        onTimeoutResultGenerator: () => any,
+        maxMs: number = 10000,
+        sleep: number = 21
+    ): Promise<any> {
         const start = Date.now();
         return new Promise((resolve, reject) => {
-            const loop =async () => {
+            const loop = async () => {
                 try {
-                    const v=await cb();
-                    if (v!==undefined) {
+                    const v = await cb();
+                    if (v !== undefined) {
                         resolve(v);
                     } else {
                         const now = Date.now();
@@ -31,11 +38,11 @@ export default class Utils {
             loop();
         });
     }
-    static satoshiTimestamp(){
+    static satoshiTimestamp() {
         // time in milliseconds since 3 january 2009
-        const jan32009=new Date("2009-01-03").getTime();
-        const now=new Date().getTime();
-        return now-jan32009;
+        const jan32009 = new Date("2009-01-03").getTime();
+        const now = new Date().getTime();
+        return now - jan32009;
     }
 
     static async encrypt(
@@ -50,77 +57,76 @@ export default class Utils {
         return await nip04.decrypt(ourPrivateKey, theirPublicKey, text);
     }
 
-    static async decryptEvent(event: Event, secret:string|Uint8Array): Promise<Event> {   
-        try{
+    static async decryptEvent(event: Event, secret: string | Uint8Array): Promise<Event> {
+        try {
             const kind = event.kind;
-            if(kind>=5000&&kind<6000){ // job request
+            if (kind >= 5000 && kind < 6000) {
+                // job request
                 const encryptedPayload = event.content;
                 const decryptedPayload = await nip04.decrypt(secret, event.pubkey, encryptedPayload);
                 const decryptedTags = JSON.parse(decryptedPayload);
                 event.tags.push(...decryptedTags);
                 event.content = "";
-            }else if(kind>=6000&&kind<=6999){ // job response
+            } else if (kind >= 6000 && kind <= 6999) {
+                // job response
                 const encryptedPayload = event.content;
                 const decryptedPayload = await nip04.decrypt(secret, event.pubkey, encryptedPayload);
                 event.content = decryptedPayload;
-            }else if(kind == 7000){
+            } else if (kind == 7000) {
                 const encryptedPayload = event.content;
                 const decryptedPayload = await nip04.decrypt(secret, event.pubkey, encryptedPayload);
                 event.content = decryptedPayload;
             }
-    
+
             // event.tags=event.tags.filter(t=>t[0]!="encrypted");
-        }catch(e){
-            console.error(e);
+        } catch (e) {
+            Logger.get(this.constructor.name).error(e);
         }
         return event;
     }
 
-
-    static async encryptEvent(event:Event, secret:string|Uint8Array):Promise<Event>{
+    static async encryptEvent(event: Event, secret: string | Uint8Array): Promise<Event> {
         const p = Utils.getTagVars(event, ["p"])[0][0];
-        if(!p){
-            console.warn("No public key found in event. Can't encrypt");
+        if (!p) {
+            Logger.get(this.constructor.name).warn("No public key found in event. Can't encrypt");
             return event;
         }
 
         const encryptedTag = Utils.getTagVars(event, ["encrypted"])[0][0];
-      
 
         const kind = event.kind;
-        if(kind>=5000&&kind<6000){ // job request
+        if (kind >= 5000 && kind < 6000) {
+            // job request
             const tags = event.tags;
             const tagsToEncrypt = [];
-            for(let i=0;i<tags.length;i++){
-                if(tags[i][0]=="i"){
+            for (let i = 0; i < tags.length; i++) {
+                if (tags[i][0] == "i") {
                     tagsToEncrypt.push(tags[i]);
-                    tags.splice(i,1);
+                    tags.splice(i, 1);
                     i--;
                 }
             }
             const encryptedTags = await nip04.encrypt(secret, p, JSON.stringify(tagsToEncrypt));
             event.content = encryptedTags;
-        }else if(kind>=6000&&kind<=6999){ // job response
-            const encryptedPayload = await nip04.encrypt(secret, p, event.content||"");
+        } else if (kind >= 6000 && kind <= 6999) {
+            // job response
+            const encryptedPayload = await nip04.encrypt(secret, p, event.content || "");
             event.content = encryptedPayload;
-        }else if(kind == 7000){
-            const encryptedPayload = await nip04.encrypt(secret, p, event.content||"");
+        } else if (kind == 7000) {
+            const encryptedPayload = await nip04.encrypt(secret, p, event.content || "");
             event.content = encryptedPayload;
         }
 
-        if(!encryptedTag){
+        if (!encryptedTag) {
             event.tags.push(["encrypted", "true"]);
         }
         return event;
-
     }
 
-
-
-    static async getHyperdriveDiscoveryKey(secret:string|Uint8Array):Promise<string> {
+    static async getHyperdriveDiscoveryKey(secret: string | Uint8Array): Promise<string> {
         if (typeof secret == "string") {
             if (secret.startsWith("hyperdrive+bundle://")) {
-                secret= secret.replace("hyperdrive+bundle://", "");
+                secret = secret.replace("hyperdrive+bundle://", "");
             }
             secret = hexToBytes(secret);
         }
@@ -130,22 +136,25 @@ export default class Utils {
         return Math.min(Math.max(value, min), max);
     }
 
-    static async encryptHyperdrive(url: string, secretKey: string | Uint8Array):Promise<{
-        bundleUrl: string,
-        discoveryHash: string,
-        encryptedUrl: string,
+    static async encryptHyperdrive(
+        url: string,
+        secretKey: string | Uint8Array
+    ): Promise<{
+        bundleUrl: string;
+        discoveryHash: string;
+        encryptedUrl: string;
     }> {
         if (!url.startsWith("hyperdrive://")) {
             throw new Error("Invalid hyperdrive url");
         }
         if (typeof secretKey == "string") {
             if (secretKey.startsWith("hyperdrive+bundle://")) {
-                secretKey= secretKey.replace("hyperdrive+bundle://", "");
+                secretKey = secretKey.replace("hyperdrive+bundle://", "");
             }
-            if(secretKey.includes("?")){
+            if (secretKey.includes("?")) {
                 secretKey = secretKey.split("?")[0];
             }
-            if(secretKey.includes("#")){
+            if (secretKey.includes("#")) {
                 secretKey = secretKey.split("#")[0];
             }
             secretKey = hexToBytes(secretKey);
@@ -156,7 +165,7 @@ export default class Utils {
         const bundleUrl = "hyperdrive+bundle://" + bytesToHex(secretKey);
 
         return {
-            bundleUrl : bundleUrl,
+            bundleUrl: bundleUrl,
             discoveryHash: discoveryHash,
             encryptedUrl: encryptedUrl,
         };
@@ -166,11 +175,11 @@ export default class Utils {
         if (!bundleUrl.startsWith("hyperdrive+bundle://")) {
             throw new Error("Invalid hyperdrive bundle url");
         }
-        bundleUrl=bundleUrl.replace("hyperdrive+bundle://", "");
-        if(bundleUrl.includes("?")){
+        bundleUrl = bundleUrl.replace("hyperdrive+bundle://", "");
+        if (bundleUrl.includes("?")) {
             bundleUrl = bundleUrl.split("?")[0];
         }
-        if(bundleUrl.includes("#")){
+        if (bundleUrl.includes("#")) {
             bundleUrl = bundleUrl.split("#")[0];
         }
         const secretKey = hexToBytes(bundleUrl);
@@ -178,7 +187,6 @@ export default class Utils {
         return await nip04.decrypt(secretKey, publicKey, encryptedUrl);
     }
 
-  
     static uuidFrom(v: any): string {
         if (typeof v == "string") {
             return crypto

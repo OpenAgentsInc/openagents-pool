@@ -1,5 +1,6 @@
 import Auth from "../Auth";
 import {Event} from "nostr-tools";
+import Logger from "../Logger";
 type AuthCache = {
     id: string;
     methodName: string;
@@ -9,6 +10,7 @@ type AuthCache = {
 export default class JsonAuth extends Auth {
     baseUrl: string;
     authCache: AuthCache[] = [];
+    logger = Logger.get(this.constructor.name);
 
     constructor(baseUrl: string) {
         super();
@@ -49,11 +51,12 @@ export default class JsonAuth extends Auth {
                     break;
                 }catch(e){
                     lastException = e;
-                    console.log(e);
+                    this.logger.log(e);
                     await new Promise((resolve) => setTimeout(resolve, 1000));
                 }
             }
             if(lastException){
+                this.logger.log("Error getting auth", lastException);
                 throw lastException;
             }
         }

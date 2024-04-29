@@ -1,8 +1,9 @@
 
 import Fs from "fs";
-
+import Logger from "./Logger";
 export default class WebHooks {
     hooks: string[];
+    logger = Logger.get(this.constructor.name);
     constructor(hooks: string[]) {
         this.hooks = hooks.filter((hook) => hook )
     }
@@ -11,7 +12,7 @@ export default class WebHooks {
         const res = await Promise.allSettled(
             this.hooks.map((hook) => {
                 if(hook.startsWith("file")){
-                    console.info("Fake hook called\n", JSON.stringify(obj, null, 2));
+                    this.logger.info("Fake hook called\n", JSON.stringify(obj, null, 2));
                     if(hook.includes("://")){
                         const file = hook.split("://")[1];
                         if(file){
@@ -35,7 +36,7 @@ export default class WebHooks {
         );
         for (let i = 0; i < this.hooks.length; i++) {
             if (res[i].status === "rejected") {
-                console.error(`Error in hook ${this.hooks[i]}: ${res[i]}`);
+                this.logger.error(`Error in hook ${this.hooks[i]}: ${res[i]}`);
             }
         }
         return res;
