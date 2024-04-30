@@ -177,10 +177,12 @@ export default class Logger {
             l(level: string, ...args: any[]) {
                 let logString="";
                 for(const arg of args){
-                    if(typeof arg=="object"){
-                        logString+=JSON.stringify(arg, null, 2);
-                    } else if(arg instanceof Error){
+                    
+                    if(arg instanceof Error){
+                        logString+=arg.toString();
                         logString+=arg.stack+"\n"+arg.message;
+                    } else if(typeof arg=="object"){
+                        logString+=JSON.stringify(arg, null, 2);
                     } else{
                         logString+=arg.toString();
                     }

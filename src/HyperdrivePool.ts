@@ -79,8 +79,8 @@ export class SharedDrive extends EventEmitter {
         let data = undefined;
         for (const drive of this.drives) {
             if (await drive.exists(path)) {
-                this.logger.log("Found file ",path," in drive", drive.key.toString("hex"));
-                data = drive.get(path);
+                this.logger.fine("Found file ", path, " in drive", drive.key.toString("hex"));
+                data = drive.get(path); // TODO: add timeout
             }
         }
         if (data) return data;
@@ -163,7 +163,7 @@ export class SharedDrive extends EventEmitter {
             }
         }
         if (!newestEntryInDrive) throw "File not found";
-        const rs = newestEntryInDrive.createReadStream(path);
+        const rs = newestEntryInDrive.createReadStream(path); // TODO: add timeout
         rs.readAll = async () => {
             const buffers = [];
             for await (const buffer of rs) {
@@ -308,7 +308,7 @@ export default class HyperdrivePool {
     ): Promise<string> {
         try{
             // await this.discovery.flushed();
-            const secretKey = !secret ? generateSecretKey() : secp256k1.etc.hashToPrivateKey(secret);
+            const secretKey =  Utils.generateSecretKey(secret);
 
             const bundleUrl =
                 "hyperdrive+bundle://" +
@@ -339,7 +339,7 @@ export default class HyperdrivePool {
         }
     }
 
-    async open(owner: string, bundleUrl: string, encryptionKey?: string): Promise<[string, number]> {
+    async open(owner: string, bundleUrl: string, encryptionKey?: string, wait:number=-1): Promise<[string, number]> {
         if (!bundleUrl.startsWith("hyperdrive+bundle://")) {
             bundleUrl = "hyperdrive+bundle://" + bundleUrl;
         }
@@ -379,12 +379,23 @@ export default class HyperdrivePool {
                         : undefined,
                 });
                 waitList.push(
-                    (async () => {
+                    new Promise(async (res,rej) => {
+                        if (wait>=0)  {
+                            this.logger.fine("Wait for remote disk", drive.url, "for", wait, "ms");
+                            setTimeout(() => res("Timeout"), wait);
+                        }else{
+                            this.logger.fine("Wait for remote disk", drive.url);
+                        }
                         await hd.ready();
+                        this.logger.fine("Checkout remote disk", drive.url);
                         hd = await hd.checkout(Number(drive.version));
                         await hd.ready();
-                        sharedDrive.addDrive(hd, drive.owner);
-                    })()
+                        this.logger.fine("Add remote disk", drive.url);
+                        await sharedDrive.addDrive(hd, drive.owner);
+                        this.logger.fine("Added remote disk", drive.url);
+
+                        res(undefined);
+                    })
                 );
                 connectedRemoteDrivers = true;
                 this.logger.log("Connected to remote disk", drive.url);
@@ -414,10 +425,10 @@ export default class HyperdrivePool {
         return [bundleUrl, await sharedDrive.getVersion()];
     }
 
-    async get(owner: string, bundleUrl: string): Promise<SharedDrive> {
+    async get(owner: string, bundleUrl: string,encryptionKey?:string, wait:number=-1): Promise<SharedDrive> {
         let sharedDriver = this.drives[bundleUrl];
         if (!sharedDriver) {
-            bundleUrl = (await this.open(owner, bundleUrl))[0];
+            bundleUrl = (await this.open(owner, bundleUrl, encryptionKey, wait))[0];
             sharedDriver = this.drives[bundleUrl];
         }
         sharedDriver.lastAccess = Date.now();

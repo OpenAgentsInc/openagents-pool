@@ -1,10 +1,33 @@
-import { Event, nip04, getPublicKey } from "nostr-tools";
+import { Event, nip04, getPublicKey, generateSecretKey } from "nostr-tools";
 import { uuid as uuidv4 } from "uuidv4";
 import crypto from "crypto";
 import { hexToBytes, bytesToHex } from "@noble/hashes/utils";
 import Logger from "./Logger";
+import * as secp256k1 from "@noble/secp256k1";
+import Crypto from "crypto";
 export default class Utils {
     
+    static generateSecretKey(seed?:string):Uint8Array{
+        try{
+            if(seed){
+                const seedBuffer = Buffer.from(seed, "utf8");
+                const hashSeedHex = Crypto.createHash("sha512").update(seedBuffer).digest("hex");
+                return secp256k1.etc.hashToPrivateKey(hashSeedHex);
+            }else{
+                return generateSecretKey();
+            }
+        }catch(e){
+            Logger.get(this.constructor.name).error("Can't generate secret key from seed "+seed,e);
+            throw e;
+        }
+    }
+
+    static getPublicKey(secretKey: string | Uint8Array): string {
+        if (typeof secretKey == "string") {
+            secretKey = hexToBytes(secretKey);
+        }
+        return getPublicKey(secretKey);
+    }
 
     static newUUID() {
         return uuidv4();
@@ -211,10 +234,10 @@ export default class Utils {
         }
     }
 
-    static hash(v: any): string {
+    static sha512(v: any): string {
        if (typeof v == "string") {
            return crypto
-               .createHash("sha256")
+               .createHash("sha512")
                .update(v as string)
                .digest("hex");
        } else {

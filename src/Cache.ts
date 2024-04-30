@@ -110,13 +110,13 @@ export default class Cache {
                 bundleUrl = await Fs.promises.readFile(bundleUrlPath, { encoding: "utf-8" });
             } else {
                 // console.log("Create new cache instance.");
-                bundleUrl = await this.drives.create(this.poolId,undefined,false,Utils.hash(name));
+                bundleUrl = await this.drives.create(this.poolId,undefined,false,name);
                 await Fs.promises.writeFile(bundleUrlPath, bundleUrl, { encoding: "utf-8" });
             }
 
             let version;
-            [bundleUrl, version] = await this.drives.open(this.poolId, bundleUrl);
-            const drive = await this.drives.get(this.poolId, bundleUrl);
+            [bundleUrl, version] = await this.drives.open(this.poolId, bundleUrl,undefined,2000);
+            const drive = await this.drives.get(this.poolId, bundleUrl,undefined,2000);
             drive.on("close", () => {
                 delete this.CACHES[name];
             });
