@@ -102,26 +102,30 @@ export default class Cache {
             // console.log("Cache instance found");
             return this.CACHES[name];
         }
+        try{
+            const bundleUrlPath = Path.join(this.cacheUrl, name + ".bundledcache");
+            let bundleUrl = "";
+            if (Fs.existsSync(bundleUrlPath)) {
+                // console.log("Freezed cache instance found. Warming up...");
+                bundleUrl = await Fs.promises.readFile(bundleUrlPath, { encoding: "utf-8" });
+            } else {
+                // console.log("Create new cache instance.");
+                bundleUrl = await this.drives.create(this.poolId,undefined,false,Utils.hash(name));
+                await Fs.promises.writeFile(bundleUrlPath, bundleUrl, { encoding: "utf-8" });
+            }
 
-        const bundleUrlPath = Path.join(this.cacheUrl, name + ".bundledcache");
-        let bundleUrl = "";
-        if (Fs.existsSync(bundleUrlPath)) {
-            // console.log("Freezed cache instance found. Warming up...");
-            bundleUrl = await Fs.promises.readFile(bundleUrlPath, { encoding: "utf-8" });
-        } else {
-            // console.log("Create new cache instance.");
-            bundleUrl = await this.drives.create(this.poolId);
-            await Fs.promises.writeFile(bundleUrlPath, bundleUrl, { encoding: "utf-8" });
+            let version;
+            [bundleUrl, version] = await this.drives.open(this.poolId, bundleUrl);
+            const drive = await this.drives.get(this.poolId, bundleUrl);
+            drive.on("close", () => {
+                delete this.CACHES[name];
+            });
+            const cacheDrive = new CacheDisk(drive, this.cacheVersion);
+            this.CACHES[name] = cacheDrive;
+            return cacheDrive;
+        }catch(e){
+            Logger.get(this.constructor.name).error("Can't load cache disk",e);
+            throw e;
         }
-
-        let version;
-        [bundleUrl, version] = await this.drives.open(this.poolId, bundleUrl);
-        const drive = await this.drives.get(this.poolId, bundleUrl);
-        drive.on("close", () => {
-            delete this.CACHES[name];
-        });
-        const cacheDrive = new CacheDisk(drive, this.cacheVersion);
-        this.CACHES[name] = cacheDrive;
-        return cacheDrive;
     }
 }

@@ -15,6 +15,8 @@ import Path from "path";
 import { EventEmitter } from "events";
 import Logger from "./Logger";
 import { hexToBytes, bytesToHex } from "@noble/hashes/utils";
+import * as secp256k1 from "@noble/secp256k1";
+
 export type DriverOut = {
     flushAndWait:()=>Promise<void>
     write:(data:Buffer|string|Uint8Array)=>void
@@ -301,33 +303,40 @@ export default class HyperdrivePool {
     async create(
         owner: string,
         encryptionKey?: string,
-        includeEncryptionKeyInUrl: boolean = false
+        includeEncryptionKeyInUrl: boolean = false,
+        secret: string | undefined = undefined
     ): Promise<string> {
-        // await this.discovery.flushed();
+        try{
+            // await this.discovery.flushed();
+            const secretKey = !secret ? generateSecretKey() : secp256k1.etc.hashToPrivateKey(secret);
 
-        const bundleUrl =
-            "hyperdrive+bundle://" +
-            bytesToHex(generateSecretKey()) +
-            (includeEncryptionKeyInUrl && encryptionKey
-                ? `?encryptionKey=${encodeURIComponent(encryptionKey)}`
-                : "");
+            const bundleUrl =
+                "hyperdrive+bundle://" +
+                bytesToHex(secretKey) +
+                (includeEncryptionKeyInUrl && encryptionKey
+                    ? `?encryptionKey=${encodeURIComponent(encryptionKey)}`
+                    : "");
 
-        const bundleNamespace = bundleUrl.replace(/[^a-zA-Z0-9]/g, "_");
-        const corestore = this.store.namespace(bundleNamespace);
+            const bundleNamespace = bundleUrl.replace(/[^a-zA-Z0-9]/g, "_");
+            const corestore = this.store.namespace(bundleNamespace);
 
-        const drive = new Hyperdrive(corestore, {
-            encryptionKey: encryptionKey ? b4a.from(encryptionKey, "hex") : undefined,
-        });
-        await drive.ready();
+            const drive = new Hyperdrive(corestore, {
+                encryptionKey: encryptionKey ? b4a.from(encryptionKey, "hex") : undefined,
+            });
+            await drive.ready();
 
-        this.drives[bundleUrl] = new SharedDrive(bundleUrl, this.conn);
-        this.drives[bundleUrl].addDrive(drive, owner, true);
+            this.drives[bundleUrl] = new SharedDrive(bundleUrl, this.conn);
+            this.drives[bundleUrl].addDrive(drive, owner, true);
 
-        // const diskUrl = "hyperdrive://" + drive.key.toString("hex");
-        // console.log("Announce driver", diskUrl);
-        // await this.conn.announceHyperdrive(owner, bundleUrl, diskUrl);
-        // await Fs.promises.writeFile(Path.join(this.storagePath, bundleNamespace + ".lstatep"), "true");
-        return bundleUrl;
+            // const diskUrl = "hyperdrive://" + drive.key.toString("hex");
+            // console.log("Announce driver", diskUrl);
+            // await this.conn.announceHyperdrive(owner, bundleUrl, diskUrl);
+            // await Fs.promises.writeFile(Path.join(this.storagePath, bundleNamespace + ".lstatep"), "true");
+            return bundleUrl;
+        }catch(e){
+            this.logger.error("Error creating hyperdrive",e);
+            throw e;
+        }
     }
 
     async open(owner: string, bundleUrl: string, encryptionKey?: string): Promise<[string, number]> {

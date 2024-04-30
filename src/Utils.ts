@@ -187,6 +187,7 @@ export default class Utils {
         return await nip04.decrypt(secretKey, publicKey, encryptedUrl);
     }
 
+
     static uuidFrom(v: any): string {
         if (typeof v == "string") {
             return crypto
@@ -208,6 +209,18 @@ export default class Utils {
             v = JSON.stringify(v);
             return Utils.secureUuidFrom(v);
         }
+    }
+
+    static hash(v: any): string {
+       if (typeof v == "string") {
+           return crypto
+               .createHash("sha256")
+               .update(v as string)
+               .digest("hex");
+       } else {
+           v = JSON.stringify(v);
+           return Utils.secureUuidFrom(v);
+       }
     }
 
     static getTagVars(event: Event, tagName: Array<string> | string): Array<Array<string>> {
