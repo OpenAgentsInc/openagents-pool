@@ -24,6 +24,7 @@ export default class WebHooks {
                         }
                     }
                 }else{
+                    this.logger.finest("Calling hook", hook, obj);
                     return fetch(hook, {
                         method: "POST",
                         headers: {
