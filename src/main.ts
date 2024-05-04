@@ -115,6 +115,7 @@ async function main(){
     const hyp = new HyperdrivePool(POOL_BLOB_STORAGE_PATH, nostr);
     const cache = new Cache(POOL_BLOB_STORAGE_PATH, hyp, POOL_NOSTR_PUBLIC_KEY);
     const server = new RPCServer(
+        POOL_NOSTR_PUBLIC_KEY,
         POOL_NOSTR_SECRET_KEY,
         POOL_GRPC_BINDING_ADDRESS,
         POOL_GRPC_BINDING_PORT,

@@ -621,7 +621,9 @@ export default class RPCServer {
     poolSecretKey: string;
     cache: Cache;
     auth: Auth;
+    poolPublicKey: string;
     constructor(
+        poolPublicKey: string,
         poolSecretKey: string,
         addr: string,
         port: number,
@@ -644,6 +646,7 @@ export default class RPCServer {
         this.hyperdrivePool = hyperdrivePool;
         this.cache = cache;
         this.poolSecretKey = poolSecretKey;
+        this.poolPublicKey = poolPublicKey;
         this.auth = auth;
     }
 
@@ -662,7 +665,7 @@ export default class RPCServer {
                 new RpcConnector(this.nostrConnector, this.hyperdrivePool, this.cache)
             );
             if (this.auth) {
-                service = this.auth.adaptNodeService(this.poolSecretKey, service);
+                service = this.auth.adaptNodeService(this.poolPublicKey, service);
             }
 
             server.addService(...service);

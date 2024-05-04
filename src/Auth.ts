@@ -35,7 +35,7 @@ export default class Auth {
     }
 
     adaptNodeService(
-        poolSecretKey: string,
+        poolPublicKey: string,
         data: [GRPC.ServiceDefinition, GRPC.UntypedServiceImplementation]
     ): [GRPC.ServiceDefinition, GRPC.UntypedServiceImplementation] {
         let [def, impl] = data;
@@ -47,7 +47,8 @@ export default class Auth {
                     try {
                         const metadata = call.metadata.getMap();
                         const token: string =
-                            metadata["authorization"] || bytesToHex(Utils.generateSecretKey(call.getPeer()));
+                            metadata["authorization"] ||
+                            bytesToHex(Utils.generateSecretKey(poolPublicKey+"-"+call.getPeer()));
 
                         let conn=this.activeAuthsList[token] ;
                         if(!conn){
@@ -65,11 +66,12 @@ export default class Auth {
                         
 
                         call.metadata.set("nodeid", conn.publicToken);
-                        call.metadata.set("cacheid", call.metadata.get("nodeid"));
+                        call.metadata.set("cacheid", conn.publicToken);
 
                         if (this.isNodeAuthorized(methodName, conn.publicToken)) {
                             methodImplementation(call, callback);
                         } else {
+                            this.logger.error("Unauthorized access rejected for", methodName, "from", conn.publicToken);
                             callback({
                                 code: GRPC.status.UNAUTHENTICATED,
                                 message: "Invalid token",
