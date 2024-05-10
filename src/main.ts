@@ -10,6 +10,7 @@ import Path from "path";
 import JsonAuth from "./auth/JsonAuth";
 import NoAuth from "./auth/NoAuth";
 import Logger from "./Logger";
+import Auth from "./Auth";
 async function main(){
     process.on("uncaughtException", (err) => {
         Logger.get().error("There was an uncaught error", err);
@@ -104,10 +105,10 @@ async function main(){
     Logger.get().info("Starting pool...");
 
  
-    let auth = new NoAuth();
+    let auth:Auth = new NoAuth();
     if (POOL_AUTH_SERVICE.startsWith("json:")) {
         const baseUrl = POOL_AUTH_SERVICE.substring(5);
-        auth = new JsonAuth(baseUrl);
+        auth = new JsonAuth(baseUrl, POOL_NOSTR_PUBLIC_KEY);
     }
 
     const webhooks = new WebHooks(POOL_EVENTS_WEBHOOK_ENDPOINTS);
