@@ -163,7 +163,7 @@ export default class NostrConnector {
             if (local) return;
             if (this.auth) {
                 if (event.pubkey != this.pk) {
-                    if (!this.auth.isEventAuthorized(event)) {
+                    if (!await this.auth.isEventAuthorized(event)) {
                         this.logger.warn("Received event from an unauthorized source. Ignore", event);
                         return;
                     }
