@@ -32,6 +32,23 @@ type CustomSubscription = {
     events: Event[];
 };
 
+type KindRange = {
+    min:number;
+    max:number;
+}
+
+type NearbyDiscoveryFilter = {
+    kinds?: number[];
+    nodes?: string[];
+    tags?: string[];
+    kindRanges?: KindRange[];
+};
+
+type DiscoveryFilter = NearbyDiscoveryFilter& {
+    
+    pools?: string[];
+};
+
 type Drive = {
     encryptedUrl:string,    
     url:string,
@@ -39,6 +56,24 @@ type Drive = {
     owner: string,
     version: number
 }
+
+type DiscoveredAction={  
+    id?:string;
+    template:string;
+    meta:any;
+    sockets:any;
+ }
+
+type DiscoveredNode = {
+    id: string;
+    name: string;
+    picture: string;
+    description: string;
+    actions: Array<DiscoveredAction>;
+    pool: string;
+    timestamp: number;
+    kinds: number[];
+};
 
 export default class NostrConnector {
     logger = Logger.get(this.constructor.name);
@@ -58,6 +93,8 @@ export default class NostrConnector {
     drives: Map<string, Array<Drive>> = new Map();
     webhooks: WebHooks | undefined;
     auth: Auth;
+
+    discoveredNodes: Map<string, DiscoveredNode> = new Map();
 
     constructor(
         secretKey: string,
@@ -83,12 +120,11 @@ export default class NostrConnector {
         this.auth = auth;
         this.resub();
         this._loop();
-        
     }
 
-    async resub(){
-        while(true){
-            try{
+    async resub() {
+        while (true) {
+            try {
                 await this.pool.subscribeMany(
                     this.relays,
                     [
@@ -106,16 +142,16 @@ export default class NostrConnector {
                             return this._onEvent(event, false);
                         },
                         onclose: () => {
-                            try{
+                            try {
                                 this.resub();
-                            }catch(e){
+                            } catch (e) {
                                 this.logger.error("Error resubscribing", e);
                             }
-                        }
+                        },
                     }
                 );
                 break;
-            }catch(e){
+            } catch (e) {
                 this.logger.error("Error subscribing", e);
                 await new Promise((resolve) => setTimeout(resolve, 10000));
             }
@@ -143,7 +179,86 @@ export default class NostrConnector {
             }
 
             this.callWebHooks("Event", event);
-            if (event.kind == 1063) {
+            if (event.kind == 31990) {
+                // actions discovery
+                try {
+                    const pool = event.pubkey;
+                    const kinds = [];
+                    for (const kind of Utils.getTagVars(event, ["k"])) {
+                        kinds.push(...kind.map((k) => parseInt(k)));
+                    }
+                    const node = Utils.getTagVars(event, ["d"])[0][0];
+                    const content = JSON.parse(event.content);
+                    const nodeName = content.name;
+                    const nodePicture = content.picture;
+                    const nodeDescription = content.description;
+                    const actions = content.actions;
+                    if (
+                        !node 
+                    ){
+                        throw "Invalid node: unset";
+                    
+                    }
+                    if(kinds.length == 0){
+                        throw "Invalid node: no kinds";
+                    }
+                    if(typeof nodeName == "undefined" ){
+                        throw "Invalid node: no name";
+                    }
+                    if(typeof nodePicture == "undefined" ){
+                        throw "Invalid node: no picture";
+                    }
+                    if(typeof nodeDescription == "undefined"){
+                        throw "Invalid node: no description";
+                    }
+                    if(!actions ){
+                        throw "Invalid node: no actions";
+                    }
+                    if(typeof actions != "object"
+                    ) {
+                        throw "Invalid node: actions not an object "+typeof actions;
+                    }
+
+                    for (const action of actions) {
+                        if (
+                            !action.template ||
+                            typeof action.template != "string" ||
+                            !action.meta ||
+                            typeof action.meta != "object" ||
+                            !action.sockets ||
+                            typeof action.sockets != "object"
+                        ) {
+                            throw new Error("Invalid tool");
+                        }
+                    }
+
+                    const id = pool + "." + node;
+                    let discoveredNode = this.discoveredNodes.get(id);
+                    if (!discoveredNode) {
+                        discoveredNode = {
+                            id: id,
+                            name: "",
+                            picture: "",
+                            description: "",
+                            actions: [],
+                            pool: pool,
+                            kinds: kinds,
+                            timestamp: 0,
+                        };
+                        this.discoveredNodes.set(id, discoveredNode);
+                    }
+                    discoveredNode.timestamp = Date.now();
+                    discoveredNode.actions = actions;
+                    discoveredNode.description = nodeDescription;
+                    discoveredNode.name = nodeName;
+                    discoveredNode.picture = nodePicture;
+                    discoveredNode.pool = pool;
+                    discoveredNode.id = id;
+                    discoveredNode.kinds = kinds;
+                } catch (e) {
+                    this.logger.finest("Node is not discoverable", e, event);
+                }
+            } else if (event.kind == 1063) {
                 this.logger.finest("Discovered hyperdrive+bundle", event);
                 const discoveryKey = Utils.getTagVars(event, ["x"])[0][0];
                 if (!discoveryKey) {
@@ -360,10 +475,11 @@ export default class NostrConnector {
             this.logger.error("Error looping", e);
         }
 
+        const announceDuration = this.announcementTimeout * 2.5;
         for (const node of this.nodes) {
             try {
                 if (!node.isUpdateNeeded()) continue;
-                const events = await node.toEvent(this.sk);
+                const events = await node.toEvent(this.sk, announceDuration);
                 this.logger.log("Announce node\n", JSON.stringify(events, null, 2), "\n");
                 for (const event of events) this.sendEvent(event);
                 node.clearUpdateNeeded();
@@ -376,6 +492,16 @@ export default class NostrConnector {
             this.nodes = this.nodes.filter((node) => !node.isExpired());
         } catch (e) {
             this.logger.error("Error filtering nodes", e);
+        }
+
+        try {
+            for (const [id, node] of this.discoveredNodes) {
+                if (Date.now() - node.timestamp > announceDuration * 2.5) {
+                    this.discoveredNodes.delete(id);
+                }
+            }
+        } catch (e) {
+            this.logger.error("Error removing expired discovered nodes", e);
         }
         setTimeout(() => this._loop(), 1000);
     }
@@ -542,6 +668,29 @@ export default class NostrConnector {
         return job;
     }
 
+    async sendJobRequest(nodeId:string,event: string, provider: string|undefined, encrypted: boolean|undefined): Promise<Job> {
+        const eventTemplate: EventTemplate = JSON.parse(event);
+        if (!(eventTemplate.kind >= 5000 && eventTemplate.kind <= 5999)) throw new Error("Invalid kind");
+        
+        eventTemplate.tags = eventTemplate.tags.filter((tag) => tag[0] != "p");
+        if (provider) {
+            eventTemplate.tags.push(["p", provider]);
+        }
+        
+        eventTemplate.tags = eventTemplate.tags.filter((tag) => tag[0] != "encrypted");
+        if (encrypted) {
+            eventTemplate.tags.push(["encrypted", "true"]);
+        }
+        
+        eventTemplate.tags = eventTemplate.tags.filter((tag) => tag[0] != "d");
+        eventTemplate.tags.push(["d", nodeId]);
+            
+        const submittedEvent = await this.sendEvent(eventTemplate, true);
+        const job = new Job(this.maxEventDuration, "", "", [], [], this.maxJobExecutionTime);
+        await job.merge(submittedEvent, this.relays);
+        return job;
+    }
+
     async requestJob(
         nodeId: string,
         runOn: string,
@@ -555,8 +704,7 @@ export default class NostrConnector {
         encrypted?: boolean
     ): Promise<Job> {
         let sk: Uint8Array = this.sk;
-        if (kind && !((kind >= 5000 && kind <= 5999) || (kind >= 6000 && kind <= 6999)))
-            throw new Error("Invalid kind " + kind);
+        if (kind && !(kind >= 5000 && kind <= 5999)) throw new Error("Invalid kind " + kind);
         const job = new Job(
             Utils.clamp(expireAfter, this.minEventDuration, this.maxEventDuration),
             runOn,
@@ -730,5 +878,112 @@ export default class NostrConnector {
         const submittedEvent = this.sendEvent(event, true);
         // await deleteOlds;
         return (await submittedEvent).id;
+    }
+
+    async getNearbyDiscoveredNodes(nearFilter: NearbyDiscoveryFilter): Promise<Array<DiscoveredNode>> {
+        const filter: DiscoveryFilter = {
+            ...nearFilter,
+            pools: [this.pk],
+        };
+        return this.getDiscoveredNodes(filter);
+    }
+
+    async getDiscoveredNodes(filters: DiscoveryFilter) {
+        const nodes = [];
+        for (const node of this.discoveredNodes.values()) {
+            if (filters.pools &&  filters.pools.length>0&&!filters.pools.includes(node.pool)) continue;
+            if (filters.nodes && filters.nodes.length>0&&!filters.nodes.includes(node.id)) continue;
+            if (filters.kinds && filters.kinds.length>0&&!node.kinds.some((k) => filters.kinds.includes(k))) continue;
+            if (
+                filters.kindRanges &&
+                filters.kindRanges.length>0&&
+                !filters.kindRanges.some((range) => {
+                    if (node.kinds.some((k) => k >= range.min && k <= range.max)) {
+                        return true;
+                    }
+                    return false;
+                })
+            ) {
+                continue;
+            }
+            nodes.push(node);
+        }
+        return nodes;
+    }
+
+    async getDiscoveredPools() {
+        // TODO
+        return [];
+    }
+
+    async getNearbyDiscoveredActions(
+        nearFilter: NearbyDiscoveryFilter
+    ): Promise<Array<{ template: string; meta: any; sockets: any }>> {
+        const filter: DiscoveryFilter = {
+            ...nearFilter,
+            pools: [this.pk],
+        };
+        return this.getDiscoveredActions(filter);
+    }
+
+    async getDiscoveredActions(
+        filter: DiscoveryFilter
+    ): Promise<Array<{ template: string; meta: any; sockets: any }>> {
+        const actions: Map<string, DiscoveredAction> = new Map();
+        for (const node of this.discoveredNodes.values()) {
+            if (filter.pools && filter.pools.length>0&& !filter.pools.includes(node.pool)) continue;
+            if (filter.nodes && filter.nodes.length>0&& !filter.nodes.includes(node.id)) continue;
+            if (filter.kinds && filter.kinds.length>0&&!node.kinds.some((k) => filter.kinds.includes(k))) continue;
+            if (
+                filter.kindRanges &&
+                filter.kindRanges.length>0&&
+                !filter.kindRanges.some((range) => {
+                    if (node.kinds.some((k) => k >= range.min && k <= range.max)) {
+                        return true;
+                    }
+                    return false;
+                })
+            ) {
+                continue;
+            }
+            for (const action of node.actions) {
+                try {
+                    if (filter.kinds && filter.kinds.length>0&& !filter.kinds.includes(action.meta.kind)) continue;
+                    if (
+                        filter.kindRanges &&
+                        filter.kindRanges.length>0&&
+                        !filter.kindRanges.some((range) => {
+                            if (action.meta.kind >= range.min && action.meta.kind <= range.max) {
+                                return true;
+                            }
+                            return false;
+                        })
+                    ) {
+                        continue;
+                    }
+
+                    if (
+                        filter.tags &&
+                        filter.tags.length>0&&
+                        (!action.meta.tags || !filter.tags.some((tag) => action.meta.tags.includes(tag)))
+                    )
+                        continue;
+                    let actionId = JSON.stringify([action.template, action.sockets, action.meta]);
+                    actionId = Utils.uuidFrom(actionId);
+                    action.meta.id = actionId;
+                    actions.set(actionId, action);
+                } catch (e) {
+                    this.logger.finest("Error filtering discovered action", e);
+                }
+            }
+        }
+
+        return Array.from(actions.values()).map((action) => {
+            return {
+                template: action.template,
+                meta: action.meta,
+                sockets: action.sockets,
+            };
+        });
     }
 }
