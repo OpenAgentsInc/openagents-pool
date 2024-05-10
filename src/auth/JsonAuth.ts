@@ -1,6 +1,7 @@
 import Auth from "../Auth";
 import {Event} from "nostr-tools";
 import Logger from "../Logger";
+import Fs from "fs";
 type AuthCache = {
     id: string;
     methodName: string;
@@ -11,6 +12,7 @@ export default class JsonAuth extends Auth {
     private baseUrl: string;
     private authCache: AuthCache[] = [];
     private poolPublicKey: string;
+    private authFile: string;
 
     constructor(baseUrl: string, poolPublicKey: string) {
         super();
@@ -18,7 +20,25 @@ export default class JsonAuth extends Auth {
         this.poolPublicKey = poolPublicKey;
     }
 
-    async _getAuth(methodName: string, nodeId: string): Promise<AuthCache> {
+    async _getAuth(methodName: string, nodeId: string): Promise<boolean> {
+        if(!this.baseUrl.startsWith("http://")&&!this.baseUrl.startsWith("https://")){
+            this.logger.finer("Loading auth from file", this.baseUrl);
+            const data = await Fs.promises.readFile(this.baseUrl);
+            this.authFile=JSON.parse(data.toString());
+            const authorized =
+                    this.authFile &&
+                    this.authFile[nodeId] &&
+                    this.authFile[nodeId][methodName] &&
+                    this.authFile[nodeId][methodName] &&
+                    this.authFile[nodeId][methodName]["authorized"]
+                    ? true
+                    : false;
+                
+            
+            return authorized;
+        }
+    
+        
         let auth = undefined;
         for (let i = 0; i < this.authCache.length; i++) {
             const cache = this.authCache[i];
