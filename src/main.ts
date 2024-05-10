@@ -8,6 +8,7 @@ import HyperdrivePool from "./HyperdrivePool";
 import Cache from "./Cache";
 import Path from "path";
 import JsonAuth from "./auth/JsonAuth";
+import NoAuth from "./auth/NoAuth";
 import Logger from "./Logger";
 async function main(){
     process.on("uncaughtException", (err) => {
@@ -103,7 +104,7 @@ async function main(){
     Logger.get().info("Starting pool...");
 
  
-    let auth = undefined;
+    let auth = new NoAuth();
     if (POOL_AUTH_SERVICE.startsWith("json:")) {
         const baseUrl = POOL_AUTH_SERVICE.substring(5);
         auth = new JsonAuth(baseUrl);
