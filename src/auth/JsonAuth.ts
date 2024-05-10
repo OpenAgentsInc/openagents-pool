@@ -24,7 +24,7 @@ export default class JsonAuth extends Auth {
             const cache = this.authCache[i];
             if (cache.id === nodeId && cache.methodName === methodName) {
                 if (Date.now() - cache.timestamp < 1000 * 60 * 15) {
-                    auth = cache.authorized;
+                    auth = cache;
                 } else {
                     this.authCache.splice(i, 1);
                 }
@@ -69,7 +69,7 @@ export default class JsonAuth extends Auth {
             }
         }
 
-        return auth;
+        return auth.authorized;
     }
 
     async isEventAuthorized(event: Event): Promise<boolean> {
@@ -91,7 +91,7 @@ export default class JsonAuth extends Auth {
         if(jobEvent){
             if(await  this.isNodeAuthorized("submitJobEvent", event.pubkey))return true;
         }
-        return this.isNodeAuthorized("submitEvent", event.pubkey);
+        return await this.isNodeAuthorized("submitEvent", event.pubkey);
         
     }
 

@@ -161,14 +161,12 @@ export default class NostrConnector {
     async _onEvent(event: Event, local: boolean) {
         try {
             if (local) return;
-            if (this.auth) {
-                if (event.pubkey != this.pk) {
-                    if (!await this.auth.isEventAuthorized(event)) {
-                        this.logger.warn("Received event from an unauthorized source. Ignore", event);
-                        return;
-                    }
-                }
+            if (!(await this.auth.isEventAuthorized(event))){
+                this.logger.warn("Received event from an unauthorized source. Ignore", event);
+                return;
             }
+            
+            
             const encrypted = Utils.getTagVars(event, ["encrypted"])[0][0];
             if (encrypted) {
                 const p = Utils.getTagVars(event, ["p"])[0][0];
