@@ -84,6 +84,10 @@ export default class Node  {
         description: string,
         announcementTimeout: number
     ) {
+        if(typeof id!=="string") {
+            console.trace();
+            throw new Error("Invalid id "+id);
+        }
         this.id = id;
         this.name = name;
         this.iconUrl = iconUrl;
@@ -160,7 +164,7 @@ export default class Node  {
         
         const ks = [];
         for (const ev of this.eventRegistration) {
-            if (ev.meta.king&&!ks.find((k) => k[1] === ev.meta.king)) {
+            if (ev.meta.kind&&!ks.find((k) => k[1] === ev.meta.kind)) {
                 ks.push(["k", ""+ev.meta.kind]);
             }
         }
@@ -191,7 +195,7 @@ export default class Node  {
                 },
                 null, 2
             ),
-            tags: [["d", this.id], ...ks],
+            tags: [["d", ""+this.id], ...ks],
         };
 
         const events = [finalizeEvent(event, secretKey)];
