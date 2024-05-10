@@ -75,8 +75,24 @@ export default class JsonAuth extends Auth {
     async isEventAuthorized(event: Event): Promise<boolean> {
         if(event.pubkey==this.poolPublicKey) return true;
         const kind = event.kind;
-        if (kind < 5000 || kind > 5999) return true;
+        let jobEvent=false;
+        if (kind >= 5000 && kind <= 5999) {
+            jobEvent=true;
+            if(await  this.isNodeAuthorized("submitJobRequestEvent", event.pubkey))return true;
+        }
+        if(kind>=6000 && kind<=6999){
+            jobEvent = true;
+            if(await  this.isNodeAuthorized("submitJobResponseEvent", event.pubkey))return true;
+        }
+        if(kind==7000){
+            jobEvent = true;
+            if(await  this.isNodeAuthorized("submitJobFeedbackEvent", event.pubkey))return true;
+        }
+        if(jobEvent){
+            if(await  this.isNodeAuthorized("submitJobEvent", event.pubkey))return true;
+        }
         return this.isNodeAuthorized("submitEvent", event.pubkey);
+        
     }
 
     async isNodeAuthorized(methodName: string, nodeId: string): Promise<boolean> {
