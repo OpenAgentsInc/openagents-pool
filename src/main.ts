@@ -67,9 +67,7 @@ async function main(){
         POOL_NOSTR_PUBLIC_KEY
     );
 
-    const POOL_AUTH_SERVICE =
-        process.env.POOL_AUTH_SERVICE ||
-        "json:https://gist.githubusercontent.com/riccardobl/6b05b2a6f5836b5e7954d9623c00c397/raw/oa-auth-test.json";
+    const POOL_AUTH_SERVICE =  process.env.POOL_AUTH_SERVICE ||      "";
 
     const LOG_LEVEL = process.env.LOG_LEVEL || "finest";
 
