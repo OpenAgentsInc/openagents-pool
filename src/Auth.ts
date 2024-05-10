@@ -43,7 +43,7 @@ export default class Auth {
         impl = Object.fromEntries(
             Object.entries(impl).map(([methodName, methodImplementation]: [any, any]) => [
                 methodName,
-                (call, callback) => {
+               async (call, callback) => {
                     try {
                         const metadata = call.metadata.getMap();
                         const token: string =
@@ -67,8 +67,9 @@ export default class Auth {
 
                         call.metadata.set("nodeid", conn.publicToken);
                         call.metadata.set("cacheid", conn.publicToken);
+                        
 
-                        if (this.isNodeAuthorized(methodName, conn.publicToken)) {
+                        if (await this.isNodeAuthorized(methodName, conn.publicToken)) {
                             methodImplementation(call, callback);
                         } else {
                             this.logger.error("Unauthorized access rejected for", methodName, "from", conn.publicToken);

@@ -22,7 +22,7 @@ export default class JsonAuth extends Auth {
         for(let i=0; i<this.authCache.length; i++){
             const cache = this.authCache[i];
             if(cache.id === nodeId && cache.methodName === methodName){
-                if(Date.now() - cache.timestamp < 1000*60*5){
+                if(Date.now() - cache.timestamp < 1000*60*15){
                     auth = cache.authorized;
                 }else{
                     this.authCache.splice(i,1);
@@ -31,7 +31,7 @@ export default class JsonAuth extends Auth {
             }
         }
         
-        if(!auth){
+        if(typeof auth=="undefined"){
             let lastException=undefined;
             for(let retry=0;retry<10;retry++){
                 try{
@@ -39,7 +39,11 @@ export default class JsonAuth extends Auth {
                     const response = await fetch(url);
                     const data = await response.json();
                     const authorized =
-                        data && data[nodeId] && data[nodeId][methodName] && data[nodeId][methodName].authorized;
+                        data &&
+                        data[nodeId] &&
+                        data[nodeId][methodName] &&
+                        data[nodeId][methodName] &&
+                        data[nodeId][methodName]["authorized"] ? true :false;
                     auth = {
                         id: nodeId,
                         methodName: methodName,
@@ -48,6 +52,7 @@ export default class JsonAuth extends Auth {
                     };
                     this.authCache.push(auth);
                     lastException=undefined;
+                    this.logger.finer("Loaded auth", auth);
                     break;
                 }catch(e){
                     lastException = e;
@@ -73,13 +78,13 @@ export default class JsonAuth extends Auth {
 
     async isNodeAuthorized(methodName: string, nodeId: string): Promise<boolean> {
         const auth = await this._getAuth(methodName, nodeId);
-        if (auth.authorized) return true;
+        if (auth) return true;
         const allAuth = await this._getAuth(methodName, "*");
-        if (allAuth.authorized) return true;
+        if (allAuth) return true;
         const authAllMethods = await this._getAuth("*", nodeId);
-        if (authAllMethods.authorized) return true;
+        if (authAllMethods) return true;
         const allAuthAllMethods = await this._getAuth("*", "*");
-        if (allAuthAllMethods.authorized) return true;
+        if (allAuthAllMethods) return true;
         return false;        
     }
 }
