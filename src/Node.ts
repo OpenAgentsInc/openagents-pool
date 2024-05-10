@@ -146,7 +146,7 @@ export default class Node  {
     }
 
 
-    toEvent(secretKey: Uint8Array) {
+    toEvent(secretKey: Uint8Array, duration: number = 0) {
         // remove expired templates
         const now = Date.now();
         this.eventRegistration = this.eventRegistration.filter((reg) => {
@@ -165,6 +165,10 @@ export default class Node  {
             }
         }
 
+        if(duration){
+            ks.push(["expiration", ""+(Math.floor((Date.now() + duration)/ 1000) )]);
+        }
+
         const event: NostrEventTemplate = {
             kind: 31990,
             created_at: Math.floor(Date.now() / 1000),
@@ -172,8 +176,8 @@ export default class Node  {
                 {
                     name: this.name,
                     picture: this.iconUrl || "",
-                    about: this.description,
-                    tools: this.eventRegistration.map((e) => {
+                    description: this.description,
+                    actions: this.eventRegistration.map((e) => {
                         try{                            
                             return {
                                 template: e.template,
