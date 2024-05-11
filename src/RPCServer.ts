@@ -616,7 +616,8 @@ class RpcConnector implements IPoolConnector {
                 request.kind,
                 request.outputFormat,
                 request.requestProvider,
-                request.encrypted
+                request.encrypted,
+                request.userId
             );
         } catch (e) {
             this.logger.error(e);

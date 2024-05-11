@@ -699,7 +699,8 @@ export default class NostrConnector {
         kind?: number,
         outputFormat?: string,
         provider?: string,
-        encrypted?: boolean
+        encrypted?: boolean,
+        userId?: string 
     ): Promise<Job> {
         let sk: Uint8Array = this.sk;
         if (kind && !(kind >= 5000 && kind <= 5999)) throw new Error("Invalid kind " + kind);
@@ -715,7 +716,8 @@ export default class NostrConnector {
             outputFormat,
             nodeId,
             provider,
-            encrypted
+            encrypted,
+            userId
         );
         this.logger.log("Received job request", job);
         const events: Array<EventTemplate> = await job.toRequest();

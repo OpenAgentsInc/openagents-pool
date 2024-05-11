@@ -50,6 +50,7 @@ export default class Job implements _Job {
     nodeId: string = "";
     assignedTo: string[] = [];
     encrypted: boolean = false;
+    userId: string = "";
     constructor(
         maxEventDuration: number,
         runOn: string,
@@ -62,7 +63,8 @@ export default class Job implements _Job {
         outputFormat?: string,
         nodeId?: string,
         provider?: string,
-        encrypted: boolean = false
+        encrypted: boolean = false,
+        userId?: string
     ) {
         this.timestamp = Date.now();
         this.maxEventDuration = maxEventDuration;
@@ -102,6 +104,9 @@ export default class Job implements _Job {
             if (encrypted) {
                 throw new Error("Provider is required for encrypted jobs");
             }
+        }
+        if(userId){
+            this.userId = userId;
         }
     }
 
@@ -174,6 +179,10 @@ export default class Job implements _Job {
                     marker,
                 });
             }
+
+            let userId=Utils.getTagVars(event,["userid"])[0][0]||"";
+
+
             if (!this.id) this.id = id;
             this.provider = provider;
             this.nodeId = nodeId;
@@ -184,7 +193,7 @@ export default class Job implements _Job {
             this.customerPublicKey = customerPublicKey;
             this.description = description;
             this.encrypted = encrypted;
-
+            this.userId=userId;
             this.relays = [];
             this.outputFormat = expectedOutputFormat;
             // this.results = {};
@@ -321,6 +330,7 @@ export default class Job implements _Job {
                 ["e", this.id],
                 ["p", customerPublicKey],
                 ["d", nodeId],
+                ["userid",this.userId],
                 ["expiration", "" + Math.floor(this.expiration / 1000)],
                 this.encrypted ? ["encrypted", "true"] : undefined,
             ].filter((t) => t),
@@ -345,6 +355,7 @@ export default class Job implements _Job {
                 ["e", this.id],
                 ["p", customerPublicKey],
                 ["d", nodeId],
+                ["userid", this.userId],
                 ["expiration", "" + Math.floor(this.expiration / 1000)],
                 this.encrypted ? ["encrypted", "true"] : undefined,
             ].filter((t) => t),
@@ -364,6 +375,7 @@ export default class Job implements _Job {
                 ["p", this.customerPublicKey],
                 ["expiration", "" + Math.floor(this.expiration / 1000)],
                 ["d", nodeId],
+                ["userid", this.userId],
                 this.encrypted ? ["encrypted", "true"] : undefined,
             ].filter((t) => t),
         };
@@ -388,6 +400,7 @@ export default class Job implements _Job {
                 ["p", this.customerPublicKey],
                 ["expiration", "" + Math.floor(this.expiration / 1000)],
                 ["d", nodeId],
+                ["userid", this.userId],
                 this.encrypted ? ["encrypted", "true"] : undefined,
             ].filter((t) => t),
         };
@@ -410,6 +423,7 @@ export default class Job implements _Job {
                 ["p", this.customerPublicKey],
                 ["expiration", "" + Math.floor(this.expiration / 1000)],
                 ["d", nodeId],
+                ["userid", this.userId],
                 this.encrypted ? ["encrypted", "true"] : undefined,
             ].filter((t) => t),
         };
@@ -467,6 +481,7 @@ export default class Job implements _Job {
                 ["param", "run-on", this.runOn],
                 ["about", this.description],
                 ["output", this.outputFormat],
+                ["userid", this.userId],
                 ["d", this.nodeId],
                 this.encrypted ? ["encrypted", "true"] : undefined,
             ].filter((t) => t),
