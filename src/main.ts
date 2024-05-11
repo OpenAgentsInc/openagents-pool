@@ -85,20 +85,11 @@ async function main(){
 
 
     // init logger
-    await Logger.init(
+    Logger.init(
         POOL_NAME,
         POOL_VERSION,
         LOG_LEVEL,
-        OPENOBSERVE_ENDPOINT,
-        OPENOBSERVE_ORG,
-        OPENOBSERVE_STREAM,
-        OPENOBSERVE_BASICAUTH || {
-            username: OPENOBSERVE_USERNAME,
-            password: OPENOBSERVE_PASSWORD,
-        },
-        OPENOBSERVE_BATCHSIZE,
-        OPENOBSERVE_FLUSH_INTERVAL,
-        OPENOBSERVE_LOG_LEVEL
+        !!OPENOBSERVE_ENDPOINT        
     );
     Logger.get().info("Starting pool...");
 
