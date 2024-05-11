@@ -104,9 +104,15 @@ async function main(){
 
  
     let auth:Auth = new NoAuth();
-    if (POOL_AUTH_SERVICE.startsWith("json:")) {
-        const baseUrl = POOL_AUTH_SERVICE.substring(5);
-        auth = new JsonAuth(baseUrl, POOL_NOSTR_PUBLIC_KEY);
+    if (POOL_AUTH_SERVICE.startsWith("json:")||POOL_AUTH_SERVICE.endsWith(".json")) {
+        let baseUrl = POOL_AUTH_SERVICE;
+        Logger.get().info("Using JSON Auth service", baseUrl);
+        if(baseUrl.startsWith("json:")){
+            baseUrl=baseUrl.substring(5);
+        }
+        auth = new JsonAuth(baseUrl, POOL_NOSTR_PUBLIC_KEY);        
+    }else{
+        Logger.get().info("Using NoAuth service "+POOL_AUTH_SERVICE);
     }
 
     const webhooks = new WebHooks(POOL_EVENTS_WEBHOOK_ENDPOINTS);

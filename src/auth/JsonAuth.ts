@@ -22,9 +22,11 @@ export default class JsonAuth extends Auth {
 
     async _getAuth(methodName: string, nodeId: string): Promise<boolean> {
         if(!this.baseUrl.startsWith("http://")&&!this.baseUrl.startsWith("https://")){
-            this.logger.finer("Loading auth from file", this.baseUrl);
-            const data = await Fs.promises.readFile(this.baseUrl);
-            this.authFile=JSON.parse(data.toString());
+            if (!this.authFile){
+                this.logger.finer("Loading auth from file", this.baseUrl);
+                const data = await Fs.promises.readFile(this.baseUrl, "utf8");
+                this.authFile=JSON.parse(data);
+            }
             const authorized =
                     this.authFile &&
                     this.authFile[nodeId] &&
@@ -32,32 +34,33 @@ export default class JsonAuth extends Auth {
                     this.authFile[nodeId][methodName] &&
                     this.authFile[nodeId][methodName]["authorized"]
                     ? true
-                    : false;
-                
-            
+                    : false;                
+
             return authorized;
         }
     
         
-        let auth = undefined;
+        let auth;
+
         for (let i = 0; i < this.authCache.length; i++) {
             const cache = this.authCache[i];
             if (cache.id === nodeId && cache.methodName === methodName) {
-                if (Date.now() - cache.timestamp < 1000 * 60 * 15) {
-                    auth = cache;
-                } else {
-                    this.authCache.splice(i, 1);
-                }
+                auth = cache;                
                 break;
             }
         }
 
-        if (typeof auth == "undefined") {
+        if (! auth ||Date.now()-auth.timestamp>1000*60*60*24) {
             let lastException = undefined;
+            let t=1000;
             for (let retry = 0; retry < 10; retry++) {
                 try {
                     const url = `${this.baseUrl}/?id=${nodeId}&method=${methodName}`;
-                    const response = await fetch(url);
+                    const response = await fetch(url,{
+                        headers: {
+                            "Content-Type": "application/json",
+                        },
+                    });
                     const data = await response.json();
                     const authorized =
                         data &&
@@ -80,7 +83,8 @@ export default class JsonAuth extends Auth {
                 } catch (e) {
                     lastException = e;
                     this.logger.log(e);
-                    await new Promise((resolve) => setTimeout(resolve, 1000));
+                    await new Promise((resolve) => setTimeout(resolve, t));
+                    t=Math.max(10000,t*2);
                 }
             }
             if (lastException) {
@@ -89,7 +93,7 @@ export default class JsonAuth extends Auth {
             }
         }
 
-        return auth.authorized;
+        return auth&&auth.authorized;
     }
 
     async isEventAuthorized(event: Event): Promise<boolean> {
