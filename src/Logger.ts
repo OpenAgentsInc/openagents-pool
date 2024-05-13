@@ -1,4 +1,5 @@
 import goodbye from "graceful-goodbye";
+import util from "util"; 
 enum LogLevel {
     finest = "finest",
     finer = "finer",
@@ -166,7 +167,7 @@ export default class Logger {
         let message = "";
         for (const arg of args) {
             if (typeof arg == "object") {
-                message += JSON.stringify(arg, null, 2)+"\n";
+                message += util.inspect(arg)+"";
             } else {
                 message += arg+" ";
             }
