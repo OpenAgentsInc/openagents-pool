@@ -1,14 +1,14 @@
 import goodbye from "graceful-goodbye";
 import util from "util"; 
-enum LogLevel {
-    finest = "finest",
-    finer = "finer",
-    fine = "fine",
-    debug = "debug",
-    info = "info",
-    warn = "warn",
-    error = "error"
-}
+const LogLevel = {
+    finest : 0,
+    finer : 1,
+    fine : 2,
+    debug : 3,
+    info : 4,
+    warn : 5,
+    error : 6
+};
 
 type OpenObserveOptions = {
     stream: string;
