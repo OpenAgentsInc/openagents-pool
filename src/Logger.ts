@@ -1,12 +1,12 @@
 import goodbye from "graceful-goodbye";
 enum LogLevel {
-    error = "error",
-    warn = "warn",
-    info = "info",
-    debug = "debug",
-    fine = "fine",
+    finest = "finest",
     finer = "finer",
-    finest = "finest"
+    fine = "fine",
+    debug = "debug",
+    info = "info",
+    warn = "warn",
+    error = "error"
 }
 
 type OpenObserveOptions = {
@@ -198,7 +198,7 @@ export default class Logger {
 
     error(...args) {
         this.log("error", ...args);
-        console.error(new Error().stack);
+        console.error(args,new Error().stack);
     }
 
     debug(...args) {
