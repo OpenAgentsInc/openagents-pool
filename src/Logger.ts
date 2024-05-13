@@ -167,7 +167,7 @@ export default class Logger {
         let message = "";
         for (const arg of args) {
             if (typeof arg == "object") {
-                message += util.inspect(arg)+"";
+                message += util.inspect(arg) + "\n";
             } else {
                 message += arg+" ";
             }
