@@ -51,6 +51,31 @@ export default class Job implements _Job {
     assignedTo: string[] = [];
     encrypted: boolean = false;
     userId: string = "";
+
+    toJSON(){
+        return {
+            id: this.id,
+            kind: this.kind,
+            runOn: this.runOn,
+            expiration: this.expiration,
+            timestamp: this.timestamp,
+            input: this.input,
+            param: this.param,
+            customerPublicKey: this.customerPublicKey,
+            description: this.description,
+            provider: this.provider,
+            relays: this.relays,
+            result: this.result,
+            state: this.state,
+            maxEventDuration: this.maxEventDuration,
+            maxExecutionTime: this.maxExecutionTime,
+            outputFormat: this.outputFormat,
+            nodeId: this.nodeId,
+            assignedTo: this.assignedTo,
+            encrypted: this.encrypted,
+            userId: this.userId
+        }
+    }
     constructor(
         maxEventDuration: number,
         runOn: string,
