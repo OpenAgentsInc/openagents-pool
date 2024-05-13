@@ -160,7 +160,7 @@ export default class Logger {
     }
 
     levelToValue(level: string) {
-        return LogLevel[level] ? LogLevel[level] : LogLevel.debug;
+        return LogLevel[level] == "undefined" ? LogLevel.debug : LogLevel[level];
     }
 
     log(level:string, ...args) {
