@@ -432,7 +432,8 @@ export default class NostrConnector {
 
     async sendEvent(
         ev: string | Event | UnsignedEvent | EventTemplate,
-        sign: boolean = true
+        sign: boolean = true,
+        delay: number=0
     ): Promise<Event> {
         try {
             let event: VerifiedEvent;
@@ -457,8 +458,15 @@ export default class NostrConnector {
                 }
             }
             this.logger.fine("Publishing event\n", event, "\n To", this.relays);
-            this.pool.publish(this.relays, event);
-            await this._onEvent(event, true);
+            if (delay){
+                setTimeout(()=>{
+                    this.pool.publish(this.relays, event);
+                    this._onEvent(event, true);
+                },delay);
+            } else {
+                this.pool.publish(this.relays, event);
+                await this._onEvent(event, true);
+            }
             return event;
         } catch (e) {
             this.logger.error("Error sending event", e);
@@ -724,7 +732,7 @@ export default class NostrConnector {
         // waitList.push(events.map((event) => this.sendEvent(event)));
         // const finalizedEvents = await Promise.all(waitList);
         for (const event of events) {
-            const f = await this.sendEvent(event);
+            const f = await this.sendEvent(event,true,300);
             if (f && !job.id) {
                 job.id = f.id;
             }
