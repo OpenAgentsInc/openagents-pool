@@ -732,7 +732,7 @@ export default class NostrConnector {
         // waitList.push(events.map((event) => this.sendEvent(event)));
         // const finalizedEvents = await Promise.all(waitList);
         for (const event of events) {
-            const f = await this.sendEvent(event);
+            const f = await this.sendEvent(event,true,1000);
             if (f && !job.id) {
                 job.id = f.id;
             }
