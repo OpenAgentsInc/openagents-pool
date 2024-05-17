@@ -162,7 +162,7 @@ export default class NostrConnector {
         try {
             if (local) return;
             if (!(await this.auth.isEventAuthorized(event))){
-                this.logger.warn("Received event from an unauthorized source. Ignore", event);
+                this.logger.finest("Received event from an unauthorized source. Ignore", event);
                 return;
             }
             
