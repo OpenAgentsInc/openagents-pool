@@ -37,7 +37,7 @@ export default class WebHooks {
         );
         for (let i = 0; i < this.hooks.length; i++) {
             if (res[i].status === "rejected") {
-                this.logger.error(`Error in hook ${this.hooks[i]}: ${res[i]}`);
+                this.logger.error(`Error in hook ${this.hooks[i]}:`,res[i]);
             }
         }
         return res;
