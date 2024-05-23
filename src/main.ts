@@ -33,7 +33,7 @@ async function main(){
     const POOL_VERSION = process.env.POOL_VERSION || "0.1";
 
     const POOL_GRPC_BINDING_ADDRESS = process.env.POOL_GRPC_BINDING_ADDRESS || "0.0.0.0";
-    const POOL_GRPC_BINDING_PORT = Number(process.env.POOL_GRPC_BINDING_PORT || 5000);
+    const POOL_GRPC_BINDING_PORT = Number(process.env.POOL_GRPC_BINDING_PORT || 5021);
     const POOL_GRPC_PROTO_DESCRIPTOR_PATH = process.env.POOL_GRPC_PROTO_DESCRIPTOR_PATH || "./docs/descriptor.pb";
 
     const POOL_GRPC_CA_CRT: string = process.env.POOL_GRPC_CA_CRT || "";
