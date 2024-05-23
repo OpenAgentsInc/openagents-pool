@@ -106,6 +106,7 @@ class RpcConnector implements IPoolConnector {
         }
     }
 
+
     async sendJobRequest(request: RpcJobRequest, context: ServerCallContext): Promise<Job> {
         try {
             const nodeId = await this.getNodeId(context);
@@ -448,13 +449,23 @@ class RpcConnector implements IPoolConnector {
             const nodeId = await this.getNodeId(context);
             const id = request.jobId;
             let job = undefined;
+            const nResults = request.nResultsToWait || 1;
             if (request.wait) {
                 job = await Utils.busyWaitForSomething(
                     async () => {
                         try {
                             job = await this.conn.getJob(nodeId, id);
-                            const isDone =
-                                job && job.state.status == JobStatus.SUCCESS && job.result.timestamp;
+                            let results=0;
+                            let errors=0;
+                            for(const state of job.results){
+                                if(state.status==JobStatus.SUCCESS&&state.result.timestamp){
+                                    results++;
+                                }else if(state.status==JobStatus.ERROR){
+                                    errors++;
+                                }
+                            }
+                            
+                            const isDone = results>=nResults;
                             if (isDone) return job;
                         } catch (e) {}
                         return undefined;
@@ -617,7 +628,8 @@ class RpcConnector implements IPoolConnector {
                 request.outputFormat,
                 request.requestProvider,
                 request.encrypted,
-                request.userId
+                request.userId,
+                request.minWorkers
             );
         } catch (e) {
             this.logger.error(e);

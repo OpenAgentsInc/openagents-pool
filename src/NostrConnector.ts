@@ -161,12 +161,11 @@ export default class NostrConnector {
     async _onEvent(event: Event, local: boolean) {
         try {
             if (local) return;
-            if (!(await this.auth.isEventAuthorized(event))){
+            if (!(await this.auth.isEventAuthorized(event))) {
                 this.logger.finest("Received event from an unauthorized source. Ignore", event);
                 return;
             }
-            
-            
+
             const encrypted = Utils.getTagVars(event, ["encrypted"])[0][0];
             if (encrypted) {
                 const p = Utils.getTagVars(event, ["p"])[0][0];
@@ -191,30 +190,26 @@ export default class NostrConnector {
                     const nodePicture = content.picture;
                     const nodeDescription = content.description;
                     const actions = content.actions;
-                    if (
-                        !node 
-                    ){
+                    if (!node) {
                         throw "Invalid node: unset";
-                    
                     }
-                    if(kinds.length == 0){
+                    if (kinds.length == 0) {
                         throw "Invalid node: no kinds";
                     }
-                    if(typeof nodeName == "undefined" ){
+                    if (typeof nodeName == "undefined") {
                         throw "Invalid node: no name";
                     }
-                    if(typeof nodePicture == "undefined" ){
+                    if (typeof nodePicture == "undefined") {
                         throw "Invalid node: no picture";
                     }
-                    if(typeof nodeDescription == "undefined"){
+                    if (typeof nodeDescription == "undefined") {
                         throw "Invalid node: no description";
                     }
-                    if(!actions ){
+                    if (!actions) {
                         throw "Invalid node: no actions";
                     }
-                    if(typeof actions != "object"
-                    ) {
-                        throw "Invalid node: actions not an object "+typeof actions;
+                    if (typeof actions != "object") {
+                        throw "Invalid node: actions not an object " + typeof actions;
                     }
 
                     for (const action of actions) {
@@ -433,7 +428,7 @@ export default class NostrConnector {
     async sendEvent(
         ev: string | Event | UnsignedEvent | EventTemplate,
         sign: boolean = true,
-        delay: number=0
+        delay: number = 0
     ): Promise<Event> {
         try {
             let event: VerifiedEvent;
@@ -458,11 +453,11 @@ export default class NostrConnector {
                 }
             }
             this.logger.fine("Publishing event\n", event, "\n To", this.relays);
-            if (delay){
-                setTimeout(()=>{
+            if (delay) {
+                setTimeout(() => {
                     this.pool.publish(this.relays, event);
                     this._onEvent(event, true);
-                },delay);
+                }, delay);
             } else {
                 this.pool.publish(this.relays, event);
                 await this._onEvent(event, true);
@@ -561,7 +556,7 @@ export default class NostrConnector {
     ): Promise<Array<Job>> {
         const jobs: Array<Job> = [];
         for (const job of this.jobs) {
-            if (!job.isAvailable() && isAvailable) {
+            if (!job.isAvailable(nodeId) && isAvailable) {
                 continue;
             }
             if (excludeIds && excludeIds.includes(job.id)) {
@@ -605,8 +600,8 @@ export default class NostrConnector {
         if (!job) {
             throw new Error("Job not found " + id);
         }
-        if (job.isAvailable()) {
-            const eventQueue = await job.accept(nodeId, this.pk);
+        if (job.isAvailable(nodeId)) {
+            const eventQueue = await job.accept(nodeId);
             await Promise.all(eventQueue.map((event) => this.sendEvent(event)));
         } else {
             throw new Error("Job already assigned " + id);
@@ -624,7 +619,7 @@ export default class NostrConnector {
         if (!job) {
             throw new Error("Job not found " + id);
         }
-        if (job.isAvailable()) {
+        if (job.isAvailable(nodeId)) {
             throw new Error("Job not assigned");
         }
         const eventQueue: EventTemplate[] = await job.cancel(nodeId, this.pk, reason);
@@ -639,7 +634,7 @@ export default class NostrConnector {
         if (!job) {
             throw new Error("Job not found " + id);
         }
-        if (job.isAvailable()) {
+        if (job.isAvailable(nodeId)) {
             throw new Error("Job not assigned " + id);
         }
         const eventQueue: EventTemplate[] = await job.output(nodeId, this.pk, output);
@@ -652,7 +647,7 @@ export default class NostrConnector {
         if (!job) {
             throw new Error("Job not found " + id);
         }
-        if (job.isAvailable()) {
+        if (job.isAvailable(nodeId)) {
             throw new Error("Job not assigned");
         }
         const eventQueue: EventTemplate[] = await job.complete(nodeId, this.pk, result);
@@ -666,7 +661,7 @@ export default class NostrConnector {
         if (!job) {
             throw new Error("Job not found " + id);
         }
-        if (job.isAvailable()) {
+        if (job.isAvailable(nodeId)) {
             throw new Error("Job not assigned " + id);
         }
         const eventQueue: EventTemplate[] = await job.log(nodeId, this.pk, log);
@@ -674,23 +669,28 @@ export default class NostrConnector {
         return job;
     }
 
-    async sendJobRequest(nodeId:string,event: string, provider: string|undefined, encrypted: boolean|undefined): Promise<Job> {
+    async sendJobRequest(
+        nodeId: string,
+        event: string,
+        provider: string | undefined,
+        encrypted: boolean | undefined
+    ): Promise<Job> {
         const eventTemplate: EventTemplate = JSON.parse(event);
         if (!(eventTemplate.kind >= 5000 && eventTemplate.kind <= 5999)) throw new Error("Invalid kind");
-        
+
         eventTemplate.tags = eventTemplate.tags.filter((tag) => tag[0] != "p");
         if (provider) {
             eventTemplate.tags.push(["p", provider]);
         }
-        
+
         eventTemplate.tags = eventTemplate.tags.filter((tag) => tag[0] != "encrypted");
         if (encrypted) {
             eventTemplate.tags.push(["encrypted", "true"]);
         }
-        
+
         eventTemplate.tags = eventTemplate.tags.filter((tag) => tag[0] != "d");
         eventTemplate.tags.push(["d", nodeId]);
-            
+
         const submittedEvent = await this.sendEvent(eventTemplate, true);
         const job = new Job(this.maxEventDuration, "", "", [], [], this.maxJobExecutionTime);
         await job.merge(submittedEvent, this.relays);
@@ -708,7 +708,8 @@ export default class NostrConnector {
         outputFormat?: string,
         provider?: string,
         encrypted?: boolean,
-        userId?: string 
+        userId?: string,
+        minWorkers?: number
     ): Promise<Job> {
         let sk: Uint8Array = this.sk;
         if (kind && !(kind >= 5000 && kind <= 5999)) throw new Error("Invalid kind " + kind);
@@ -725,14 +726,15 @@ export default class NostrConnector {
             nodeId,
             provider,
             encrypted,
-            userId
+            userId,
+            minWorkers
         );
         this.logger.log("Received job request", job);
         const events: Array<EventTemplate> = await job.toRequest();
         // waitList.push(events.map((event) => this.sendEvent(event)));
         // const finalizedEvents = await Promise.all(waitList);
         for (const event of events) {
-            const f = await this.sendEvent(event,true);
+            const f = await this.sendEvent(event, true);
             if (f && !job.id) {
                 job.id = f.id;
             }
@@ -899,12 +901,17 @@ export default class NostrConnector {
     async getDiscoveredNodes(filters: DiscoveryFilter) {
         const nodes = [];
         for (const node of this.discoveredNodes.values()) {
-            if (filters.pools &&  filters.pools.length>0&&!filters.pools.includes(node.pool)) continue;
-            if (filters.nodes && filters.nodes.length>0&&!filters.nodes.includes(node.id)) continue;
-            if (filters.kinds && filters.kinds.length>0&&!node.kinds.some((k) => filters.kinds.includes(k))) continue;
+            if (filters.pools && filters.pools.length > 0 && !filters.pools.includes(node.pool)) continue;
+            if (filters.nodes && filters.nodes.length > 0 && !filters.nodes.includes(node.id)) continue;
+            if (
+                filters.kinds &&
+                filters.kinds.length > 0 &&
+                !node.kinds.some((k) => filters.kinds.includes(k))
+            )
+                continue;
             if (
                 filters.kindRanges &&
-                filters.kindRanges.length>0&&
+                filters.kindRanges.length > 0 &&
                 !filters.kindRanges.some((range) => {
                     if (node.kinds.some((k) => k >= range.min && k <= range.max)) {
                         return true;
@@ -939,12 +946,13 @@ export default class NostrConnector {
     ): Promise<Array<{ template: string; meta: any; sockets: any }>> {
         const actions: Map<string, DiscoveredAction> = new Map();
         for (const node of this.discoveredNodes.values()) {
-            if (filter.pools && filter.pools.length>0&& !filter.pools.includes(node.pool)) continue;
-            if (filter.nodes && filter.nodes.length>0&& !filter.nodes.includes(node.id)) continue;
-            if (filter.kinds && filter.kinds.length>0&&!node.kinds.some((k) => filter.kinds.includes(k))) continue;
+            if (filter.pools && filter.pools.length > 0 && !filter.pools.includes(node.pool)) continue;
+            if (filter.nodes && filter.nodes.length > 0 && !filter.nodes.includes(node.id)) continue;
+            if (filter.kinds && filter.kinds.length > 0 && !node.kinds.some((k) => filter.kinds.includes(k)))
+                continue;
             if (
                 filter.kindRanges &&
-                filter.kindRanges.length>0&&
+                filter.kindRanges.length > 0 &&
                 !filter.kindRanges.some((range) => {
                     if (node.kinds.some((k) => k >= range.min && k <= range.max)) {
                         return true;
@@ -956,10 +964,11 @@ export default class NostrConnector {
             }
             for (const action of node.actions) {
                 try {
-                    if (filter.kinds && filter.kinds.length>0&& !filter.kinds.includes(action.meta.kind)) continue;
+                    if (filter.kinds && filter.kinds.length > 0 && !filter.kinds.includes(action.meta.kind))
+                        continue;
                     if (
                         filter.kindRanges &&
-                        filter.kindRanges.length>0&&
+                        filter.kindRanges.length > 0 &&
                         !filter.kindRanges.some((range) => {
                             if (action.meta.kind >= range.min && action.meta.kind <= range.max) {
                                 return true;
@@ -972,7 +981,7 @@ export default class NostrConnector {
 
                     if (
                         filter.tags &&
-                        filter.tags.length>0&&
+                        filter.tags.length > 0 &&
                         (!action.meta.tags || !filter.tags.some((tag) => action.meta.tags.includes(tag)))
                     )
                         continue;

@@ -20,39 +20,42 @@ import Logger from "./Logger";
  *
  */
 export default class Job implements _Job {
-    logger = Logger.get(this.constructor.name);
-    id: string = "";
-    kind: number = 5003;
-    runOn: string = "";
-    expiration: number = 0;
-    timestamp: number = 0;
-    input: JobInput[] = [];
-    param: JobParam[] = [];
-    customerPublicKey: string = "";
-    description: string = "";
-    provider: string = "";
-    relays: string[] = [];
-    result: JobResult = {
+    private logger = Logger.get(this.constructor.name);
+    public id: string = "";
+    public kind: number = 5003;
+    public runOn: string = "";
+    public expiration: number = 0;
+    public timestamp: number = 0;
+    public input: JobInput[] = [];
+    public param: JobParam[] = [];
+    public customerPublicKey: string = "";
+    public description: string = "";
+    public provider: string = "";
+    public relays: string[] = [];
+    public result: JobResult = {
         id: "",
         content: "",
         timestamp: 0,
     };
-    state: JobState = {
+    public state: JobState = {
         logs: [],
-        status: JobStatus.PENDING,
+        status: JobStatus.UNKNOWN,
         acceptedAt: 0,
         acceptedBy: "",
         timestamp: 0,
+        result: { id: "", content: "", timestamp: 0 },
+        acceptedByNode: "",
     };
-    maxEventDuration: number;
-    maxExecutionTime: number;
-    outputFormat: string = "application/json";
-    nodeId: string = "";
-    assignedTo: string[] = [];
-    encrypted: boolean = false;
-    userId: string = "";
+    public results: JobState[]=[];
+    private maxEventDuration: number;
+    public maxExecutionTime: number;
+    public outputFormat: string = "application/json";
+    public nodeId: string = "";
+    public encrypted: boolean = false;
+    public userId: string = "";
+    private minWorkers: number;
 
-    toJSON(){
+    toJSON() {
         return {
             id: this.id,
             kind: this.kind,
@@ -71,10 +74,11 @@ export default class Job implements _Job {
             maxExecutionTime: this.maxExecutionTime,
             outputFormat: this.outputFormat,
             nodeId: this.nodeId,
-            assignedTo: this.assignedTo,
             encrypted: this.encrypted,
-            userId: this.userId
-        }
+            userId: this.userId,
+            results: this.results,
+            minWorkers: this.minWorkers,
+        };
     }
     constructor(
         maxEventDuration: number,
@@ -89,7 +93,8 @@ export default class Job implements _Job {
         nodeId?: string,
         provider?: string,
         encrypted: boolean = false,
-        userId?: string
+        userId?: string,
+        minWorkers: number = 2
     ) {
         this.timestamp = Date.now();
         this.maxEventDuration = maxEventDuration;
@@ -130,9 +135,11 @@ export default class Job implements _Job {
                 throw new Error("Provider is required for encrypted jobs");
             }
         }
-        if(userId){
+        if (userId) {
             this.userId = userId;
         }
+
+        if(minWorkers)this.minWorkers = minWorkers ;
     }
 
     merge(event: Event, defaultRelays: Array<string>) {
@@ -160,6 +167,7 @@ export default class Job implements _Job {
             );
             const nodeId = Utils.getTagVars(event, ["d"])[0][0] || "";
             const encrypted = Utils.getTagVars(event, ["encrypted"])[0][0] == "true";
+            const minWorkers = Number(Utils.getTagVars(event, ["min-workers"])[0][0]) || 2;
 
             const relays: Array<string> = Utils.getTagVars(event, ["relays"])[0] || defaultRelays;
             const expectedOutputFormat: string =
@@ -205,8 +213,7 @@ export default class Job implements _Job {
                 });
             }
 
-            let userId=Utils.getTagVars(event,["userid"])[0][0]||"";
-
+            let userId = Utils.getTagVars(event, ["userid"])[0][0] || "";
 
             if (!this.id) this.id = id;
             this.provider = provider;
@@ -218,11 +225,12 @@ export default class Job implements _Job {
             this.customerPublicKey = customerPublicKey;
             this.description = description;
             this.encrypted = encrypted;
-            this.userId=userId;
+            this.userId = userId;
             this.relays = [];
             this.outputFormat = expectedOutputFormat;
-            // this.results = {};
-            // this.states = {};
+            if (minWorkers) this.minWorkers = minWorkers;
+                // this.results = {};
+                // this.states = {};
             this.input = inputs;
             this.kind = kind;
             for (const r of relays) {
@@ -234,8 +242,9 @@ export default class Job implements _Job {
             const e: Array<string> = Utils.getTagVars(event, ["e"])[0];
             const jobId: string = e[0];
             if (!jobId) throw new Error("No job id");
-            if (!this.id) this.id = jobId;
-            else if (this.id != jobId) {
+            // if (!this.id) this.id = jobId;
+            // else
+            if (this.id != jobId) {
                 throw new Error("Invalid id " + jobId + " != " + this.id);
             }
 
@@ -244,12 +253,13 @@ export default class Job implements _Job {
                 this.logger.error("Invalid provider");
                 return;
             }
+
             const content: string = event.content;
             const customerPublicKey: string = Utils.getTagVars(event, ["p"])[0][0];
-            if (!this.customerPublicKey) this.customerPublicKey = customerPublicKey;
-            else if (customerPublicKey != this.customerPublicKey) {
-                throw new Error("Invalid customer");
-            }
+
+            // if (!this.customerPublicKey) this.customerPublicKey = customerPublicKey;
+            // else
+            if (customerPublicKey != this.customerPublicKey) throw new Error("Invalid customer");
 
             const relayHint: string | undefined = e[1];
             if (relayHint) {
@@ -260,10 +270,27 @@ export default class Job implements _Job {
 
             const timestamp = Number(event.created_at) * 1000;
             const nodeId = Utils.getTagVars(event, ["d"])[0][0] || "";
+
+            let state = this.results.find((s) => {
+                return s.acceptedByNode == nodeId && s.acceptedBy == provider;
+            });
+
+            if (!state) {
+                state = {
+                    logs: [],
+                    status: JobStatus.PENDING,
+                    acceptedAt: Date.now(),
+                    acceptedBy: provider,
+                    timestamp: Date.now(),
+                    result: { id: "", content: "", timestamp: 0 },
+                    acceptedByNode: nodeId,
+                };
+                this.results.push(state);
+            }
+
             if (event.kind == 7000) {
                 // TODO: content?
                 let [status, info] = Utils.getTagVars(event, ["status"])[0];
-                const state = this.state;
 
                 if (!info && status == "log") info = content;
 
@@ -297,10 +324,11 @@ export default class Job implements _Job {
                     } else if (status == "processing") {
                         state.acceptedAt = timestamp;
                         state.acceptedBy = provider;
+                        state.acceptedByNode = nodeId;
                         state.status = JobStatus.PROCESSING;
                     } else if (status == "error") {
-                        state.acceptedAt = 0;
-                        state.acceptedBy = "";
+                        // state.acceptedAt = 0;
+                        // state.acceptedBy = "";
                         state.status = JobStatus.ERROR;
                     }
                     state.timestamp = timestamp;
@@ -309,8 +337,7 @@ export default class Job implements _Job {
                 // result
                 // if (content=="") return;
                 if (!this.result.timestamp) {
-                    const result = this.result;
-
+                    const result = state.result;
                     if (result.timestamp < timestamp) {
                         result.content = content;
                         result.timestamp = timestamp;
@@ -318,19 +345,47 @@ export default class Job implements _Job {
                     }
                 }
             }
+
+            if (
+                this.state.status == JobStatus.UNKNOWN ||
+                (this.state.acceptedByNode == nodeId && this.state.acceptedBy == provider)
+            ) {
+                this.state = state;
+            }
         }
     }
 
-    isAvailable() {
-        if (this.state.status == JobStatus.SUCCESS) return false;
+    isAvailable(nodeId:string) {
         if (this.isExpired()) return false;
-        if (
-            this.state.status == JobStatus.PROCESSING &&
-            this.state.acceptedAt &&
-            Date.now() - this.state.acceptedAt < this.maxExecutionTime
-        ) {
-            return false;
+
+        // if enough successes => not available
+        let successes = 0;
+        for (const state of this.results) {
+            // if success by the same node => not available
+            if(state.acceptedByNode==nodeId&&state.acceptedBy==this.provider) return false;
+            if (state.status == JobStatus.SUCCESS) {
+                successes++;
+            }            
         }
+        if (successes >= this.minWorkers) return false;
+
+        // if enough working are processing it => not available
+        let processing = 0;
+        for (const state of this.results) {
+            if (
+                state.status == JobStatus.PROCESSING &&
+                state.acceptedAt &&
+                Date.now() - state.acceptedAt < this.maxExecutionTime
+            ) {
+                // if processing by the same node => not available
+                if(state.acceptedByNode==nodeId&&state.acceptedBy==this.provider) return false;
+                processing++;
+            }
+        }
+        if (processing >= this.minWorkers) return false;
+
+        
+        // otherwise available
         return true;
     }
 
@@ -338,13 +393,33 @@ export default class Job implements _Job {
         return this.expiration < Date.now();
     }
 
-    async accept(nodeId: string, acceptedBy: string): Promise<Array<EventTemplate>> {
+    async accept(nodeId: string): Promise<Array<EventTemplate>> {
         const t = Date.now();
-        const state = this.state;
-        state.acceptedAt = t;
-        state.acceptedBy = acceptedBy;
-        state.status = JobStatus.PROCESSING;
+        
+        // add state immediately 
+        let state = this.results.find((s) => {
+            return s.acceptedByNode == nodeId&&s.acceptedBy==this.provider;
+        });
+        if(!state){
+            state = {
+                logs: [],
+                status: JobStatus.PENDING,
+                acceptedAt: Date.now(),
+                acceptedBy: this.provider,
+                timestamp: Date.now(),
+                result: { id: "", content: "", timestamp: 0 },
+                acceptedByNode: nodeId,
+            };
+            this.results.push(state);
+        }else{
+            state.status = JobStatus.PENDING;
+            state.acceptedAt = Date.now();
+            state.timestamp = Date.now();            
+        }
+        ///
 
+
+        
         const customerPublicKey = this.customerPublicKey;
         let feedbackEvent: EventTemplate = {
             kind: 7000,
@@ -355,7 +430,7 @@ export default class Job implements _Job {
                 ["e", this.id],
                 ["p", customerPublicKey],
                 ["d", nodeId],
-                ["userid",this.userId],
+                ["userid", this.userId],
                 ["expiration", "" + Math.floor(this.expiration / 1000)],
                 this.encrypted ? ["encrypted", "true"] : undefined,
             ].filter((t) => t),
@@ -365,10 +440,10 @@ export default class Job implements _Job {
     }
 
     async cancel(nodeId: string, cancelledBy: string, reason: string): Promise<Array<EventTemplate>> {
-        const state = this.state;
-        state.acceptedAt = 0;
-        state.acceptedBy = "";
-        state.status = JobStatus.ERROR;
+        // const state = this.state;
+        // state.acceptedAt = 0;
+        // state.acceptedBy = "";
+        // state.status = JobStatus.ERROR;
 
         const customerPublicKey = this.customerPublicKey;
         const feedbackEvent: EventTemplate = {
@@ -437,7 +512,6 @@ export default class Job implements _Job {
 
     async log(nodeId: string, pk: string, log: string): Promise<Array<EventTemplate>> {
         const t = Date.now();
-        const state = this.state;
         const feedbackEvent: EventTemplate = {
             kind: 7000,
             content: log,
@@ -507,6 +581,7 @@ export default class Job implements _Job {
                 ["about", this.description],
                 ["output", this.outputFormat],
                 ["userid", this.userId],
+                ["min-workers", "" + this.minWorkers],
                 ["d", this.nodeId],
                 this.encrypted ? ["encrypted", "true"] : undefined,
             ].filter((t) => t),
