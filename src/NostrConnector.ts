@@ -15,7 +15,7 @@ import Utils from './Utils';
 import Job  from "./Job";
 
 import {  hexToBytes } from '@noble/hashes/utils' ;
-import { JobInput, JobParam } from "openagents-grpc-proto";
+import { JobInput, JobParam, JobStatus } from "openagents-grpc-proto";
 
 import Ws from "ws";
 import Node from "./Node";
@@ -538,7 +538,7 @@ export default class NostrConnector {
                 }
                 case "job": {
                     const job = await this.getJob(nodeId, res, false);
-                    return job.result.content;
+                    return job.results.find(r=>r.status==JobStatus.SUCCESS)?.result.content||"";
                 }
             }
         });

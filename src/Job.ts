@@ -32,20 +32,20 @@ export default class Job implements _Job {
     public description: string = "";
     public provider: string = "";
     public relays: string[] = [];
-    public result: JobResult = {
-        id: "",
-        content: "",
-        timestamp: 0,
-    };
-    public state: JobState = {
-        logs: [],
-        status: JobStatus.UNKNOWN,
-        acceptedAt: 0,
-        acceptedBy: "",
-        timestamp: 0,
-        result: { id: "", content: "", timestamp: 0 },
-        acceptedByNode: "",
-    };
+    // public result: JobResult = {
+    //     id: "",
+    //     content: "",
+    //     timestamp: 0,
+    // };
+    // public state: JobState = {
+    //     logs: [],
+    //     status: JobStatus.UNKNOWN,
+    //     acceptedAt: 0,
+    //     acceptedBy: "",
+    //     timestamp: 0,
+    //     result: { id: "", content: "", timestamp: 0 },
+    //     acceptedByNode: "",
+    // };
     public results: JobState[]=[];
     private maxEventDuration: number;
     public maxExecutionTime: number;
@@ -68,8 +68,8 @@ export default class Job implements _Job {
             description: this.description,
             provider: this.provider,
             relays: this.relays,
-            result: this.result,
-            state: this.state,
+            // result: this.result,
+            // state: this.state,
             maxEventDuration: this.maxEventDuration,
             maxExecutionTime: this.maxExecutionTime,
             outputFormat: this.outputFormat,
@@ -336,7 +336,7 @@ export default class Job implements _Job {
             } else {
                 // result
                 // if (content=="") return;
-                if (!this.result.timestamp) {
+                if (!state.result.timestamp) {
                     const result = state.result;
                     if (result.timestamp < timestamp) {
                         result.content = content;
@@ -346,12 +346,12 @@ export default class Job implements _Job {
                 }
             }
 
-            if (
-                this.state.status == JobStatus.UNKNOWN ||
-                (this.state.acceptedByNode == nodeId && this.state.acceptedBy == provider)
-            ) {
-                this.state = state;
-            }
+            // if (
+            //     this.state.status == JobStatus.UNKNOWN ||
+            //     (this.state.acceptedByNode == nodeId && this.state.acceptedBy == provider)
+            // ) {
+            //     this.state = state;
+            // }
         }
     }
 
