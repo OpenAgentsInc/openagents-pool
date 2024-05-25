@@ -467,7 +467,7 @@ export default class Job implements _Job {
     async output(nodeId: string, outputBy: string, data: string): Promise<Array<EventTemplate>> {
         // const t = Date.now();
         const resultEvent: EventTemplate = {
-            kind: 6003,
+            kind: this.kind+1000,
             content: data,
             created_at: Math.floor(Date.now() / 1000),
             tags: [
