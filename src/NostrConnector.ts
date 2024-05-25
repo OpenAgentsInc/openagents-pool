@@ -168,10 +168,14 @@ export default class NostrConnector {
 
             const encrypted = Utils.getTagVars(event, ["encrypted"])[0][0];
             if (encrypted) {
-                const p = Utils.getTagVars(event, ["p"])[0][0];
-                if (p && p == this.pk) {
-                    this.logger.log("Received encrypted event", event, "Decrypting...");
-                    await Utils.decryptEvent(event, this.sk);
+                try{
+                    const p = Utils.getTagVars(event, ["p"])[0][0];
+                    if (p && p == this.pk) {
+                        this.logger.log("Received encrypted event", event, "Decrypting...");
+                        await Utils.decryptEvent(event, this.sk);
+                    }
+                }catch(e){
+                    this.logger.error("Error decrypting event", e);
                 }
             }
 
