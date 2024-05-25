@@ -123,7 +123,7 @@ export default class Utils {
             const tags = event.tags;
             const tagsToEncrypt = [];
             for (let i = 0; i < tags.length; i++) {
-                if (tags[i][0] == "i") {
+                if (tags[i][0] == "i" || tags[i][0] == "param") {
                     tagsToEncrypt.push(tags[i]);
                     tags.splice(i, 1);
                     i--;
