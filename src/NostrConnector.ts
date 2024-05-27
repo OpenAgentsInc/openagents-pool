@@ -13,7 +13,7 @@ import {
     nip47,
     nip04
 } from "nostr-tools";
-import Kinds from 'nostr-tools/lib/types/kinds';
+// import Kinds from 'nostr-tools/lib/types/kinds';
 
 import Utils from './Utils';
 import Job  from "./Job";
@@ -1028,52 +1028,52 @@ export default class NostrConnector {
 
 
     async payInvoice(nwc: string, invoice: string){
-        const nwcData = nip47.parseConnectionString(nwc);
-        const pubkey = nwcData.pubkey;
-        const relay = nwcData.relay;
-        this.addExtraRelays([relay]);
-        const secretKey = nwcData.secret;
-        const eventTemplate : EventTemplate = {
-            kind: Kinds.NWCWalletRequest,
-            content:  JSON.stringify({
-                method: "pay_invoice",
-                params: {
-                    invoice
-                },
-            }),
-            created_at: Math.round(Date.now() / 1000),
-            tags:[
-                ["p", pubkey]
-            ]
-        };
+        // const nwcData = nip47.parseConnectionString(nwc);
+        // const pubkey = nwcData.pubkey;
+        // const relay = nwcData.relay;
+        // this.addExtraRelays([relay]);
+        // const secretKey = nwcData.secret;
+        // const eventTemplate : EventTemplate = {
+        //     kind: Kinds.NWCWalletRequest,
+        //     content:  JSON.stringify({
+        //         method: "pay_invoice",
+        //         params: {
+        //             invoice
+        //         },
+        //     }),
+        //     created_at: Math.round(Date.now() / 1000),
+        //     tags:[
+        //         ["p", pubkey]
+        //     ]
+        // };
 
-        return this.sendEvent(eventTemplate, secretKey, pubkey); 
+        // return this.sendEvent(eventTemplate, secretKey, pubkey); 
     }
 
 
     async makeInvoice(nwc: string, sats: number, desc:string, expiration:number ){
-          const nwcData = nip47.parseConnectionString(nwc);
-          const pubkey = nwcData.pubkey;
-          const relay = nwcData.relay;
-          this.addExtraRelays([relay]);
+        //   const nwcData = nip47.parseConnectionString(nwc);
+        //   const pubkey = nwcData.pubkey;
+        //   const relay = nwcData.relay;
+        //   this.addExtraRelays([relay]);
 
-          const secretKey = nwcData.secret;
+        //   const secretKey = nwcData.secret;
 
-          const eventTemplate: EventTemplate = {
-              kind: Kinds.NWCWalletRequest,
-              content: JSON.stringify({
-                  method: "make_invoice",
-                  params: {
-                      amount: Math.floor(sats * 1000), // value in msats
-                      description: desc, // invoice's description, optional
-                      description_hash: "string", // invoice's description hash, optional
-                      expiry: expiration?Math.floor(expiration/1000):undefined
-                  },
-              }),
-              created_at: Math.round(Date.now() / 1000),
-              tags: [["p", pubkey]],
-          };
+        //   const eventTemplate: EventTemplate = {
+        //       kind: Kinds.NWCWalletRequest,
+        //       content: JSON.stringify({
+        //           method: "make_invoice",
+        //           params: {
+        //               amount: Math.floor(sats * 1000), // value in msats
+        //               description: desc, // invoice's description, optional
+        //               description_hash: "string", // invoice's description hash, optional
+        //               expiry: expiration?Math.floor(expiration/1000):undefined
+        //           },
+        //       }),
+        //       created_at: Math.round(Date.now() / 1000),
+        //       tags: [["p", pubkey]],
+        //   };
 
-          return this.sendEvent(eventTemplate, secretKey, pubkey); 
+        //   return this.sendEvent(eventTemplate, secretKey, pubkey); 
     }
 }

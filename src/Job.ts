@@ -1,6 +1,6 @@
 import { Event } from "nostr-tools";
 
-import { Job as _Job, Payment, JobInput, Log, JobState, JobStatus, JobResult, JobParam, Bid, PaymentStatus } from "openagents-grpc-proto";
+import { Job as _Job, Payment, JobInput, Log, JobState, JobStatus, JobResult, JobParam,  PaymentStatus } from "openagents-grpc-proto";
 
 import Utils from "./Utils";
 import {
@@ -54,7 +54,7 @@ export default class Job implements _Job {
     public encrypted: boolean = false;
     public userId: string = "";
     private minWorkers: number;
-    public bid: Bid;
+    // public bid: Bid;
 
     toJSON() {
         return {
@@ -79,7 +79,7 @@ export default class Job implements _Job {
             userId: this.userId,
             results: this.results,
             minWorkers: this.minWorkers,
-            bid:this.bid
+            // bid:this.bid
         };
     }
     constructor(
@@ -245,11 +245,11 @@ export default class Job implements _Job {
             }
 
             // calculate bid for each worker
-            this.bid={
-                amount: Number(bid) / minWorkers,
-                currency: t,
-                protocol: bidproto
-            };
+            // this.bid={
+            //     amount: Number(bid) / minWorkers,
+            //     currency: t,
+            //     protocol: bidproto
+            // };
 
         } else if (event.kind == 7000 || (event.kind >= 6000 && event.kind <= 6999)) {
             const e: Array<string> = Utils.getTagVars(event, ["e"])[0];
@@ -297,7 +297,7 @@ export default class Job implements _Job {
                     timestamp: Date.now(),
                     result: { id: "", content: "", timestamp: 0 },
                     acceptedByNode: nodeId,
-                    paymentRequests: [],
+                    // paymentRequests: [],
                 };
                 this.results.push(state);
             }
@@ -422,7 +422,7 @@ export default class Job implements _Job {
                 timestamp: Date.now(),
                 result: { id: "", content: "", timestamp: 0 },
                 acceptedByNode: nodeId,
-                paymentRequests: [],
+                // paymentRequests: [],
             };
             this.results.push(state);
         } else {
@@ -519,20 +519,20 @@ export default class Job implements _Job {
         events.push(feedbackEvent);
 
         // request payment
-        if(this.bid){
+        // if(this.bid){
             // create invoice
             // const nodeNwc;
-            const payment: Payment = {
-                id: "",
-                amount: this.bid.amount,
-                currency: this.bid.currency,
-                protocol: this.bid.protocol,
-                data: "invoice",
-                status: PaymentStatus.PAYMENT_PENDING                
-            };
+            // const payment: Payment = {
+            //     id: "",
+            //     amount: this.bid.amount,
+            //     currency: this.bid.currency,
+            //     protocol: this.bid.protocol,
+            //     data: "invoice",
+            //     status: PaymentStatus.PAYMENT_PENDING                
+            // };
 
             
-        }
+        // }
 
         // this.state.status = JobStatus.SUCCESS;
         // this.state.timestamp = Date.now();
@@ -540,44 +540,44 @@ export default class Job implements _Job {
     }
 
     registerPayment(nodeId:string, invoice:string){
-        const state = this.results.find((s) => {
-            return s.acceptedByNode == nodeId;
-        });
-        if (!state) {
-            throw new Error("Invalid node");
-        }
-        const payment: Payment = {
-            id: invoice,
-            amount: this.bid.amount,
-            currency: this.bid.currency,
-            protocol: this.bid.protocol,
-            data: invoice,
-            status: PaymentStatus.PAYMENT_RECEIVED,
-        };
-        state.paymentRequests.push(payment);
+        // const state = this.results.find((s) => {
+        //     return s.acceptedByNode == nodeId;
+        // });
+        // if (!state) {
+        //     throw new Error("Invalid node");
+        // }
+        // const payment: Payment = {
+        //     id: invoice,
+        //     amount: this.bid.amount,
+        //     currency: this.bid.currency,
+        //     protocol: this.bid.protocol,
+        //     data: invoice,
+        //     status: PaymentStatus.PAYMENT_RECEIVED,
+        // };
+        // state.paymentRequests.push(payment);
 
-        if (!state) {
-            state = {
-                logs: [],
-                status: JobStatus.PENDING,
-                acceptedAt: Date.now(),
-                acceptedBy: this.provider,
-                timestamp: Date.now(),
-                result: { id: "", content: "", timestamp: 0 },
-                acceptedByNode: nodeId,
-                paymentRequests: [],
-            };
-            this.results.push(state);
-        } else {
-            state.status = JobStatus.PENDING;
-            state.acceptedAt = Date.now();
-            state.timestamp = Date.now();
-        }
+        // if (!state) {
+        //     state = {
+        //         logs: [],
+        //         status: JobStatus.PENDING,
+        //         acceptedAt: Date.now(),
+        //         acceptedBy: this.provider,
+        //         timestamp: Date.now(),
+        //         result: { id: "", content: "", timestamp: 0 },
+        //         acceptedByNode: nodeId,
+        //         paymentRequests: [],
+        //     };
+        //     this.results.push(state);
+        // } else {
+        //     state.status = JobStatus.PENDING;
+        //     state.acceptedAt = Date.now();
+        //     state.timestamp = Date.now();
+        // }
     }
 
-    getBid(){
-        return this.bid;
-    }
+    // getBid(){
+        // return this.bid;
+    // }
 
     async log(nodeId: string, pk: string, log: string): Promise<Array<EventTemplate>> {
         const t = Date.now();
