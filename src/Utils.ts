@@ -1,4 +1,4 @@
-import { Event, nip04, getPublicKey, generateSecretKey } from "nostr-tools";
+import { Event, nip04, nip47, getPublicKey, generateSecretKey } from "nostr-tools";
 import { uuid as uuidv4 } from "uuidv4";
 import crypto from "crypto";
 import { hexToBytes, bytesToHex } from "@noble/hashes/utils";
@@ -6,6 +6,20 @@ import Logger from "./Logger";
 import * as secp256k1 from "@noble/secp256k1";
 import Crypto from "crypto";
 export default class Utils {
+
+    static parseNWC(nwc:string):{
+        pubkey:string,
+        relay:string,
+        secret:string
+    }{
+        nwc = nwc.replace("nostr+walletconnect://", "nostr+walletconnect:");
+        const nwcData = nip47.parseConnectionString(nwc);
+        return {
+            pubkey: nwcData.pubkey,
+            relay: nwcData.relay,
+            secret: nwcData.secret
+        };
+    }
     
     static generateSecretKey(seed?:string):Uint8Array{
         try{
@@ -135,7 +149,7 @@ export default class Utils {
             // job response
             const encryptedPayload = await nip04.encrypt(secret, p, event.content || "");
             event.content = encryptedPayload;
-        } else if (kind == 7000) {
+        } else {
             const encryptedPayload = await nip04.encrypt(secret, p, event.content || "");
             event.content = encryptedPayload;
         }

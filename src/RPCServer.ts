@@ -79,12 +79,13 @@ import {DriverOut} from "./HyperdrivePool";
 import Cache, { CacheDisk } from "./Cache";
 import Logger from "./Logger";
 import { kinds } from "nostr-tools";
+import NWCAdapter from "./NWCAdapter";
 
 class RpcConnector implements IPoolConnector {
-    logger = Logger.get(this.constructor.name);
-    conn: NostrConnector;
-    hyp: HyperdrivePool;
-    cache: Cache;
+    private logger = Logger.get(this.constructor.name);
+    private conn: NostrConnector;
+    private hyp: HyperdrivePool;
+    private cache: Cache;
     constructor(conn, hyp, cache) {
         this.conn = conn;
         this.hyp = hyp;
@@ -106,23 +107,20 @@ class RpcConnector implements IPoolConnector {
         }
     }
 
-
     async sendJobRequest(request: RpcJobRequest, context: ServerCallContext): Promise<Job> {
         try {
             const nodeId = await this.getNodeId(context);
-            return this.conn.sendJobRequest(
-                nodeId,
-                request.event,
-                request.provider,
-                request.encrypted
-            );
+            return this.conn.sendJobRequest(nodeId, request.event, request.provider, request.encrypted);
         } catch (e) {
             this.logger.error(e);
             throw e;
         }
     }
 
-    async discoverPools(request: RpcDiscoverPoolsRequest, context: ServerCallContext): Promise<RpcDiscoverPoolsResponse> {
+    async discoverPools(
+        request: RpcDiscoverPoolsRequest,
+        context: ServerCallContext
+    ): Promise<RpcDiscoverPoolsResponse> {
         const pools = await this.conn.getDiscoveredPools();
         return {
             pools: pools.map((p) => {
@@ -131,8 +129,7 @@ class RpcConnector implements IPoolConnector {
         };
     }
 
-
-    getKindsRange(ranges:string[]):Array<{min:number,max:number}>|undefined{
+    getKindsRange(ranges: string[]): Array<{ min: number; max: number }> | undefined {
         if (!ranges) return undefined;
         const kindRanges: Array<{ min: number; max: number }> = [];
         for (const r of ranges) {
@@ -144,27 +141,30 @@ class RpcConnector implements IPoolConnector {
             }
             kindRanges.push({ min: minN, max: maxN });
         }
-        return kindRanges.length>0?kindRanges:undefined;
+        return kindRanges.length > 0 ? kindRanges : undefined;
     }
 
-    async discoverNodes(request: RpcDiscoverNodesRequest, context: ServerCallContext): Promise<RpcDiscoverNodesResponse> {
-    
+    async discoverNodes(
+        request: RpcDiscoverNodesRequest,
+        context: ServerCallContext
+    ): Promise<RpcDiscoverNodesResponse> {
         const nodes = await this.conn.getDiscoveredNodes({
             kinds: request.filterByKinds,
             nodes: request.filterByNodes,
             pools: request.filterByPools,
-            kindRanges: this.getKindsRange(request.filterByKindRanges)
+            kindRanges: this.getKindsRange(request.filterByKindRanges),
         });
         return {
             nodes: nodes.map((n) => {
                 return JSON.stringify(n);
             }),
         };
-
     }
 
-    async discoverActions(request: RpcDiscoverActionsRequest, context: ServerCallContext): Promise<RpcDiscoverActionsResponse> {
-        
+    async discoverActions(
+        request: RpcDiscoverActionsRequest,
+        context: ServerCallContext
+    ): Promise<RpcDiscoverActionsResponse> {
         const actions = await this.conn.getDiscoveredActions({
             kinds: request.filterByKinds,
             nodes: request.filterByNodes,
@@ -175,11 +175,14 @@ class RpcConnector implements IPoolConnector {
         return {
             actions: actions.map((a) => {
                 return JSON.stringify(a);
-            })
+            }),
         };
     }
 
-    async discoverNearbyNodes(request: RpcDiscoverNearbyNodesRequest, context: ServerCallContext): Promise<RpcDiscoverNearbyNodesResponse> {
+    async discoverNearbyNodes(
+        request: RpcDiscoverNearbyNodesRequest,
+        context: ServerCallContext
+    ): Promise<RpcDiscoverNearbyNodesResponse> {
         const nodes = await this.conn.getNearbyDiscoveredNodes({
             kinds: request.filterByKinds,
             nodes: request.filterByNodes,
@@ -190,23 +193,24 @@ class RpcConnector implements IPoolConnector {
                 return JSON.stringify(n);
             }),
         };
+    }
 
-    } 
-
-    async discoverNearbyActions(request: RpcDiscoverNearbyActionsRequest, context: ServerCallContext): Promise<RpcDiscoverNearbyActionsResponse> {
+    async discoverNearbyActions(
+        request: RpcDiscoverNearbyActionsRequest,
+        context: ServerCallContext
+    ): Promise<RpcDiscoverNearbyActionsResponse> {
         const actions = await this.conn.getNearbyDiscoveredActions({
             kinds: request.filterByKinds,
             nodes: request.filterByNodes,
             tags: request.filterByTags,
             kindRanges: this.getKindsRange(request.filterByKindRanges),
         });
-        const out= {
-            actions:actions.map((a) => {
+        const out = {
+            actions: actions.map((a) => {
                 return JSON.stringify(a);
-            })
+            }),
         };
         return out;
-      
     }
 
     async createDisk(
@@ -338,7 +342,7 @@ class RpcConnector implements IPoolConnector {
                 success: true,
             };
         } catch (e) {
-           this.logger.error(e);
+            this.logger.error(e);
             throw e;
         }
     }
@@ -371,7 +375,7 @@ class RpcConnector implements IPoolConnector {
                 success: true,
             };
         } catch (e) {
-           this.logger.error(e);
+            this.logger.error(e);
             throw e;
         }
     }
@@ -382,7 +386,7 @@ class RpcConnector implements IPoolConnector {
         context: ServerCallContext
     ): Promise<void> {
         try {
-            const nodeId = await  this.getNodeId(context);
+            const nodeId = await this.getNodeId(context);
             const cache = await this.getCache(context);
             const readStream = await cache.getAsStream(request.key, request.lastVersion);
             if (!readStream) {
@@ -405,7 +409,7 @@ class RpcConnector implements IPoolConnector {
         context: ServerCallContext
     ): Promise<RpcDiskWriteFileResponse> {
         try {
-            const nodeId = await  this.getNodeId(context);
+            const nodeId = await this.getNodeId(context);
             const disk = await this.hyp.get(nodeId, request.diskId);
             await disk.put(request.path, request.data);
             return {
@@ -422,7 +426,7 @@ class RpcConnector implements IPoolConnector {
         context: ServerCallContext
     ): Promise<RpcDiskReadFileResponse> {
         try {
-            const nodeId = await  this.getNodeId(context);
+            const nodeId = await this.getNodeId(context);
             const disk = await this.hyp.get(nodeId, request.diskId);
             const data = await disk.get(request.path);
             return {
@@ -435,8 +439,23 @@ class RpcConnector implements IPoolConnector {
         }
     }
 
+    async getNWCData(context: ServerCallContext): Promise<{
+        pubkey: string;
+        relay: string;
+        secret: string;
+    }|undefined> {
+        const nwc = (await context.headers["nwc-data"]) as string;
+        if(!nwc) return undefined;
+        const nwcData = JSON.parse(nwc);
+        return {
+            pubkey: nwcData.pubkey,
+            relay: nwcData.relay,
+            secret: nwcData.secret,
+        };
+    }
+
     async getNodeId(context: ServerCallContext): Promise<string> {
-        return await context.headers["nodeid"] as string;
+        return (await context.headers["nodeid"]) as string;
     }
 
     async getCache(context: ServerCallContext): Promise<CacheDisk> {
@@ -455,17 +474,17 @@ class RpcConnector implements IPoolConnector {
                     async () => {
                         try {
                             job = await this.conn.getJob(nodeId, id);
-                            let results=0;
-                            let errors=0;
-                            for(const state of job.results){
-                                if(state.status==JobStatus.SUCCESS&&state.result.timestamp){
+                            let results = 0;
+                            let errors = 0;
+                            for (const state of job.results) {
+                                if (state.status == JobStatus.SUCCESS && state.result.timestamp) {
                                     results++;
-                                }else if(state.status==JobStatus.ERROR){
+                                } else if (state.status == JobStatus.ERROR) {
                                     errors++;
                                 }
                             }
-                            
-                            const isDone = results>=nResults;
+
+                            const isDone = results >= nResults;
                             if (isDone) return job;
                         } catch (e) {}
                         return undefined;
@@ -486,7 +505,7 @@ class RpcConnector implements IPoolConnector {
 
     async getPendingJobs(request: RpcGetPendingJobs, context: ServerCallContext): Promise<PendingJobs> {
         try {
-            const nodeId = await  this.getNodeId(context);
+            const nodeId = await this.getNodeId(context);
             const jobIdFilter: RegExp = new RegExp(request.filterById || ".*");
             const customerFilter: RegExp = new RegExp(request.filterByCustomer || ".*");
             const runOnFilter: RegExp = new RegExp(request.filterByRunOn || ".*");
@@ -533,7 +552,7 @@ class RpcConnector implements IPoolConnector {
 
     async isJobDone(request: RpcGetJob, context: ServerCallContext): Promise<RpcIsJobDone> {
         try {
-            const nodeId = await  this.getNodeId(context);
+            const nodeId = await this.getNodeId(context);
             let isDone = false;
             if (request.wait) {
                 isDone = await Utils.busyWaitForSomething(
@@ -586,7 +605,7 @@ class RpcConnector implements IPoolConnector {
 
     async outputForJob(request: RpcJobOutput, context: ServerCallContext): Promise<Job> {
         try {
-            const nodeId = await  this.getNodeId(context);
+            const nodeId = await this.getNodeId(context);
             return this.conn.outputForJob(nodeId, request.jobId, request.output);
         } catch (e) {
             this.logger.error(e);
@@ -596,7 +615,7 @@ class RpcConnector implements IPoolConnector {
 
     async completeJob(request: RpcJobComplete, context: ServerCallContext): Promise<Job> {
         try {
-            const nodeId = await  this.getNodeId(context);
+            const nodeId = await this.getNodeId(context);
             return this.conn.completeJob(nodeId, request.jobId, request.output);
         } catch (e) {
             this.logger.error(e);
@@ -713,7 +732,7 @@ class RpcConnector implements IPoolConnector {
     ): Promise<RpcAnnounceNodeResponse> {
         try {
             const nodeId = await this.getNodeId(context);
-            
+
             const [node, timeout] = await this.conn.registerNode(
                 nodeId,
                 request.name,
@@ -752,19 +771,21 @@ class RpcConnector implements IPoolConnector {
 
 
 export default class RPCServer {
-    logger = Logger.get(this.constructor.name);
-    addr: string;
-    port: number;
-    descriptorPath: string;
-    nostrConnector: NostrConnector;
-    caCrt: Buffer | undefined;
-    serverCrt: Buffer | undefined;
-    serverKey: Buffer | undefined;
-    hyperdrivePool: HyperdrivePool;
-    poolSecretKey: string;
-    cache: Cache;
-    auth: Auth;
-    poolPublicKey: string;
+    private logger = Logger.get(this.constructor.name);
+    private addr: string;
+    private port: number;
+    private descriptorPath: string;
+    private nostrConnector: NostrConnector;
+    private caCrt: Buffer | undefined;
+    private serverCrt: Buffer | undefined;
+    private serverKey: Buffer | undefined;
+    private hyperdrivePool: HyperdrivePool;
+    private poolSecretKey: string;
+    private cache: Cache;
+    private auth: Auth;
+    private poolPublicKey: string;
+    private nwc: NWCAdapter;
+
     constructor(
         poolPublicKey: string,
         poolSecretKey: string,
@@ -777,7 +798,8 @@ export default class RPCServer {
         cache: Cache,
         caCrt?: Buffer,
         serverCrt?: Buffer,
-        serverKey?: Buffer
+        serverKey?: Buffer,
+        nwc?: NWCAdapter
     ) {
         this.addr = addr;
         this.port = port;
@@ -791,6 +813,7 @@ export default class RPCServer {
         this.poolSecretKey = poolSecretKey;
         this.poolPublicKey = poolPublicKey;
         this.auth = auth;
+        this.nwc = nwc;
     }
 
     async start() {
@@ -807,8 +830,13 @@ export default class RPCServer {
                 PoolConnector,
                 new RpcConnector(this.nostrConnector, this.hyperdrivePool, this.cache)
             );
+            
             if (this.auth) {
                 service = this.auth.adaptNodeService(this.poolPublicKey, service);
+            }
+
+            if(this.nwc){
+                service = this.nwc.adaptNodeService(this.poolPublicKey, service);
             }
 
             server.addService(...service);

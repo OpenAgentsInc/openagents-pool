@@ -11,6 +11,7 @@ import JsonAuth from "./auth/JsonAuth";
 import NoAuth from "./auth/NoAuth";
 import Logger from "./Logger";
 import Auth from "./Auth";
+import NWCAdapter from "./NWCAdapter";
 async function main(){
     process.on("uncaughtException", (err) => {
         Logger.get().error("There was an uncaught error", err);
@@ -111,6 +112,8 @@ async function main(){
     nostr.setWebHooks(webhooks);
     const hyp = new HyperdrivePool(POOL_BLOB_STORAGE_PATH, nostr);
     const cache = new Cache(POOL_BLOB_STORAGE_PATH, hyp, POOL_NOSTR_PUBLIC_KEY);
+    const nwcAdapter = new NWCAdapter(nostr);
+
     const server = new RPCServer(
         POOL_NOSTR_PUBLIC_KEY,
         POOL_NOSTR_SECRET_KEY,
@@ -123,7 +126,8 @@ async function main(){
         cache,
         POOL_CA_CRT_DATA,
         POOL_SERVER_CRT_DATA,
-        POOL_SERVER_KEY_DATA
+        POOL_SERVER_KEY_DATA,
+        nwcAdapter
     );
     await server.start();
     Logger.get().info("Provider pubkey", POOL_NOSTR_PUBLIC_KEY);

@@ -10,7 +10,11 @@ import {
     VerifiedEvent,
     useWebSocketImplementation,
     verifiedSymbol,
+    nip47,
+    nip04
 } from "nostr-tools";
+import Kinds from 'nostr-tools/lib/types/kinds';
+
 import Utils from './Utils';
 import Job  from "./Job";
 
@@ -95,6 +99,7 @@ export default class NostrConnector {
     auth: Auth;
 
     discoveredNodes: Map<string, DiscoveredNode> = new Map();
+    
 
     constructor(
         secretKey: string,
@@ -431,7 +436,8 @@ export default class NostrConnector {
 
     async sendEvent(
         ev: string | Event | UnsignedEvent | EventTemplate,
-        sign: boolean = true,
+        sign: boolean|Uint8Array|string = true,
+        encryptFor: string | undefined = undefined,
         delay: number = 0
     ): Promise<Event> {
         try {
@@ -447,13 +453,23 @@ export default class NostrConnector {
                     }
                     const unsignedEvent = ev as Event;
                     const encrypted = Utils.getTagVars(unsignedEvent, ["encrypted"])[0][0];
-                    if (encrypted) {
-                        const p = Utils.getTagVars(unsignedEvent, ["p"])[0][0];
+                    if (encrypted || encryptFor) {
+                        let p = Utils.getTagVars(unsignedEvent, ["p"])[0][0];
+                        if (!p && encryptFor){
+                            p = encryptFor;
+                            unsignedEvent.tags.push(["p", encryptFor]);
+                        }
                         if (p) {
-                            await Utils.encryptEvent(unsignedEvent, this.sk);
+                            await Utils.encryptEvent(unsignedEvent, encryptFor || this.sk);
                         }
                     }
-                    event = finalizeEvent(unsignedEvent, this.sk);
+                    if(typeof sign == "string"){
+                        event = finalizeEvent(unsignedEvent, hexToBytes(sign));
+                    }else if(sign===true){
+                        event = finalizeEvent(unsignedEvent, this.sk);
+                    }else{
+                        event = finalizeEvent(unsignedEvent, sign);
+                    }
                 }
             }
             this.logger.fine("Publishing event\n", event, "\n To", this.relays);
@@ -1006,5 +1022,58 @@ export default class NostrConnector {
                 sockets: action.sockets,
             };
         });
+    }
+
+
+
+
+    async payInvoice(nwc: string, invoice: string){
+        const nwcData = nip47.parseConnectionString(nwc);
+        const pubkey = nwcData.pubkey;
+        const relay = nwcData.relay;
+        this.addExtraRelays([relay]);
+        const secretKey = nwcData.secret;
+        const eventTemplate : EventTemplate = {
+            kind: Kinds.NWCWalletRequest,
+            content:  JSON.stringify({
+                method: "pay_invoice",
+                params: {
+                    invoice
+                },
+            }),
+            created_at: Math.round(Date.now() / 1000),
+            tags:[
+                ["p", pubkey]
+            ]
+        };
+
+        return this.sendEvent(eventTemplate, secretKey, pubkey); 
+    }
+
+
+    async makeInvoice(nwc: string, sats: number, desc:string, expiration:number ){
+          const nwcData = nip47.parseConnectionString(nwc);
+          const pubkey = nwcData.pubkey;
+          const relay = nwcData.relay;
+          this.addExtraRelays([relay]);
+
+          const secretKey = nwcData.secret;
+
+          const eventTemplate: EventTemplate = {
+              kind: Kinds.NWCWalletRequest,
+              content: JSON.stringify({
+                  method: "make_invoice",
+                  params: {
+                      amount: Math.floor(sats * 1000), // value in msats
+                      description: desc, // invoice's description, optional
+                      description_hash: "string", // invoice's description hash, optional
+                      expiry: expiration?Math.floor(expiration/1000):undefined
+                  },
+              }),
+              created_at: Math.round(Date.now() / 1000),
+              tags: [["p", pubkey]],
+          };
+
+          return this.sendEvent(eventTemplate, secretKey, pubkey); 
     }
 }
