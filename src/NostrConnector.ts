@@ -1005,10 +1005,11 @@ export default class NostrConnector {
                         (!action.meta.tags || !filter.tags.some((tag) => action.meta.tags.includes(tag)))
                     )
                         continue;
+                    const actionClone = JSON.parse(JSON.stringify(action));
                     let actionId = JSON.stringify([action.template, action.sockets, action.meta]);
                     actionId = Utils.uuidFrom(actionId);
-                    action.meta.id = actionId;
-                    actions.set(actionId, action);
+                    actionClone.meta.id = actionId;
+                    actions.set(actionId, actionClone);
                 } catch (e) {
                     this.logger.finest("Error filtering discovered action", e);
                 }
