@@ -17,6 +17,7 @@
     "license": "",
     "type": "module",
     "dependencies": {
+        "@getalby/lightning-tools": "^5.0.3",
         "@grpc/grpc-js": "^1.10.4",
         "@grpc/proto-loader": "^0.7.11",
         "@grpc/reflection": "^1.0.3",
@@ -35,7 +36,7 @@
         "install": "^0.13.0",
         "nostr-tools": "^2.3.2",
         "npm": "^10.5.0",
-        "openagents-grpc-proto": "https://github.com/OpenAgentsInc/openagents-grpc-proto/releases/download/v0.9.1/openagents_grpc_proto-JAVASCRIPT.tgz",
+        "openagents-grpc-proto": "file:../openagents-grpc-proto/build/javascript/openagents-grpc-proto-0.3.4.tgz",
         "ts-node": "^10.9.2",
         "ts-protoc-gen": "^0.15.0",
         "uuidv4": "^6.2.13",

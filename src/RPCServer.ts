@@ -69,7 +69,8 @@ import {
     RpcDiscoverPoolsRequest,
     RpcDiscoverPoolsResponse,
     Job,
-    RpcJobRequest
+    RpcJobRequest,
+    RpcPayJobRequest,
 } from "openagents-grpc-proto";
 import NostrConnector from "./NostrConnector";
 
@@ -439,13 +440,16 @@ class RpcConnector implements IPoolConnector {
         }
     }
 
-    async getNWCData(context: ServerCallContext): Promise<{
-        pubkey: string;
-        relay: string;
-        secret: string;
-    }|undefined> {
+    async getNWCData(context: ServerCallContext): Promise<
+        | {
+              pubkey: string;
+              relay: string;
+              secret: string;
+          }
+        | undefined
+    > {
         const nwc = (await context.headers["nwc-data"]) as string;
-        if(!nwc) return undefined;
+        if (!nwc) return undefined;
         const nwcData = JSON.parse(nwc);
         return {
             pubkey: nwcData.pubkey,
@@ -607,6 +611,24 @@ class RpcConnector implements IPoolConnector {
         try {
             const nodeId = await this.getNodeId(context);
             return this.conn.outputForJob(nodeId, request.jobId, request.output);
+        } catch (e) {
+            this.logger.error(e);
+            throw e;
+        }
+    }
+
+    async payJob(request: RpcPayJobRequest, context: ServerCallContext): Promise<Job> {
+        try {
+            const nodeId = await this.getNodeId(context);
+            const nwc = await this.getNWCData(context);
+            return await this.conn.payJob(
+                nodeId,
+                nwc,
+                request.jobId,
+                request.amount,
+                request.currency,
+                request.protocol
+            );
         } catch (e) {
             this.logger.error(e);
             throw e;

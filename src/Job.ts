@@ -1,4 +1,5 @@
 import { Event } from "nostr-tools";
+import {Invoice as LNInvoice} from "@getalby/lightning-tools"
 
 import { Job as _Job, Payment, JobInput, Log, JobState, JobStatus, JobResult, JobParam, Bid,  PaymentStatus } from "openagents-grpc-proto";
 
@@ -177,9 +178,7 @@ export default class Job implements _Job {
                 Utils.getTagVars(event, ["output"])[0][0] || "application/json";
 
             const bidData = Utils.getTagVars(event, ["bid"])[0];
-            const bid = bidData[0];
-            const bidCurrency = bidData[1] || Utils.getTagVars(event, ["t"])[0][0] || "bitcoin";
-            const bidProto = bidData[2] || "lightning";
+      
            
 
             const description: string =
@@ -248,11 +247,16 @@ export default class Job implements _Job {
             }
 
             // calculate bid for each worker
-            this.bid={
-                amount: Number(bid) / minWorkers,
-                currency: bidCurrency,
-                protocol: bidProto
-            };
+            if(bidData){
+                const bid = bidData[0];
+                const bidCurrency = bidData[1] || Utils.getTagVars(event, ["t"])[0][0] || "bitcoin";
+                const bidProto = bidData[2] || "lightning";
+                this.bid={
+                    amount: Number(bid) / minWorkers,
+                    currency: bidCurrency,
+                    protocol: bidProto
+                };
+            }
 
         } else if (event.kind == 7000 || (event.kind >= 6000 && event.kind <= 6999)) {
             const e: Array<string> = Utils.getTagVars(event, ["e"])[0];
@@ -326,8 +330,29 @@ export default class Job implements _Job {
                 // TODO: content?
                 let [status, info] = Utils.getTagVars(event, ["status"])[0];
                 if(status=="paid"){
-                    // TODO
-
+                    const proofTag= Utils.getTagVars(event, ["proof"])[0];
+                    if (proofTag) {
+                        const [amount, invoice, currency, protocol, preimage] = proofTag;
+                        const paymentRequest = state.paymentRequests.find(p=>p.id==invoice);
+                        if(paymentRequest){
+                            if(protocol=="lightning"){
+                                const lnInvoice = new LNInvoice({pr:invoice, preimage});
+                                if (lnInvoice.satoshi!=Number(amount)) this.logger.error("Invalid payment amount");
+                                else if (lnInvoice.isPaid()) {
+                                    paymentRequest.status = PaymentStatus.PAYMENT_RECEIVED;
+                                    paymentRequest.proof = preimage;
+                                    this.logger.info("Payment received");
+                                } else {
+                                    this.logger.error("Payment proof is invalid!");
+                                }
+                            }else{
+                                this.logger.error("Unsupported payment protocol");
+                            }
+                           
+                        }else{
+                            this.logger.error("Payment request not found");                        
+                        }
+                    }
                 }else{
 
                     if (!info && status == "log") info = content;
@@ -371,7 +396,9 @@ export default class Job implements _Job {
                         }
                         state.timestamp = timestamp;
                     }
-                } else {
+              
+                }
+              } else {
                     // result
                     // if (content=="") return;
                     if (!state.result.timestamp) {
@@ -383,7 +410,6 @@ export default class Job implements _Job {
                         }
                     }
                 }
-            }
 
             // if (
             //     this.state.status == JobStatus.UNKNOWN ||
@@ -524,10 +550,11 @@ export default class Job implements _Job {
         return [resultEvent];
     }
 
-    async paid(nodeId:string, pk:string, invoice:string, preimage:string){
+    async pay(nodeId:string,  amount:number, invoice:string, currency:string, protocol:string, payer:(invoice:string, amount:number, currency:string, protocol:string)=>Promise<string>):Promise<Array<EventTemplate>>{
+        const proof = await payer(invoice, amount, currency, protocol);
         const feedbackEvent: EventTemplate = {
             kind: 7000,
-            content:  preimage,
+            content: "",
             created_at: Math.floor(Date.now() / 1000),
             tags: [
                 ["status", "paid"],
@@ -536,6 +563,7 @@ export default class Job implements _Job {
                 ["expiration", "" + Math.floor(this.expiration / 1000)],
                 ["d", nodeId],
                 ["userid", this.userId],
+                ["proof", ""+amount, invoice, currency, protocol, proof],
                 this.encrypted ? ["encrypted", "true"] : undefined,
             ].filter((t) => t),
         };
@@ -600,41 +628,6 @@ export default class Job implements _Job {
         return events;
     }
 
-    registerPayment(nodeId:string, invoice:string){
-        // const state = this.results.find((s) => {
-        //     return s.acceptedByNode == nodeId;
-        // });
-        // if (!state) {
-        //     throw new Error("Invalid node");
-        // }
-        // const payment: Payment = {
-        //     id: invoice,
-        //     amount: this.bid.amount,
-        //     currency: this.bid.currency,
-        //     protocol: this.bid.protocol,
-        //     data: invoice,
-        //     status: PaymentStatus.PAYMENT_RECEIVED,
-        // };
-        // state.paymentRequests.push(payment);
-
-        // if (!state) {
-        //     state = {
-        //         logs: [],
-        //         status: JobStatus.PENDING,
-        //         acceptedAt: Date.now(),
-        //         acceptedBy: this.provider,
-        //         timestamp: Date.now(),
-        //         result: { id: "", content: "", timestamp: 0 },
-        //         acceptedByNode: nodeId,
-        //         paymentRequests: [],
-        //     };
-        //     this.results.push(state);
-        // } else {
-        //     state.status = JobStatus.PENDING;
-        //     state.acceptedAt = Date.now();
-        //     state.timestamp = Date.now();
-        // }
-    }
 
     // getBid(){
         // return this.bid;
