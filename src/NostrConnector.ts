@@ -695,6 +695,7 @@ export default class NostrConnector {
                     throw new Error("Limit reached");
                 }
                 outEvents.push(await job.pay(nodeId,  req.amount, req.data,req.currency, req.protocol, payer));
+                req.status = PaymentStatus.PAYMENT_SENT;
                 totalPaid += req.amount;
             }
         }
