@@ -1,4 +1,4 @@
-import { Event, nip04, nip47, getPublicKey, generateSecretKey } from "nostr-tools";
+import { Event, nip04, nip47, getPublicKey, generateSecretKey, EventTemplate } from "nostr-tools";
 import { uuid as uuidv4 } from "uuidv4";
 import crypto from "crypto";
 import { hexToBytes, bytesToHex } from "@noble/hashes/utils";
@@ -122,7 +122,7 @@ export default class Utils {
         return event;
     }
 
-    static async encryptEvent(event: Event, secret: string | Uint8Array): Promise<Event> {
+    static async encryptEvent(event: Event|EventTemplate, secret: string | Uint8Array): Promise<Event|EventTemplate> {
         const p = Utils.getTagVars(event, ["p"])[0][0];
         if (!p) {
             Logger.get(this.constructor.name).warn("No public key found in event. Can't encrypt");
@@ -260,7 +260,7 @@ export default class Utils {
        }
     }
 
-    static getTagVars(event: Event, tagName: Array<string> | string): Array<Array<string>> {
+    static getTagVars(event: Event|EventTemplate, tagName: Array<string> | string): Array<Array<string>> {
         const results = new Array<Array<string>>();
         for (const t of event.tags) {
             let isMatch = true;

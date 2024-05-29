@@ -13,6 +13,7 @@ import {
     nip47,
     nip04
 } from "nostr-tools";
+import { Bid } from "openagents-grpc-proto";
 // import Kinds from 'nostr-tools/lib/types/kinds';
 
 import Utils from './Utils';
@@ -662,7 +663,7 @@ export default class NostrConnector {
         return job;
     }
 
-    async completeJob(nodeId: string, id: string, result: string) {
+    async completeJob(nodeId: string, nwcData:{pubkey: string,relay: string, secret: string}|undefined, id: string, result: string) {
         const job = await this.getJob(nodeId, id);
         if (!job) {
             throw new Error("Job not found " + id);
@@ -670,7 +671,15 @@ export default class NostrConnector {
         if (job.isAvailable(nodeId)) {
             throw new Error("Job not assigned");
         }
-        const eventQueue: EventTemplate[] = await job.complete(nodeId, this.pk, result);
+
+        let invoicer:(amount:number, currency:string, protocol:string)=>Promise<string> | undefined = undefined;
+        if(nwcData){
+            invoicer = async (amount:number, currency:string, protocol:string)=>{
+                return await this.makeInvoice(nwcData,amount, "",0);
+            }
+        }
+        
+        const eventQueue: EventTemplate[] = await job.complete(nodeId, this.pk, result, undefined, invoicer);
         await Promise.all(eventQueue.map((event) => this.sendEvent(event)));
         this.closeAllCustomSubscriptions(id);
         return job;
@@ -1028,53 +1037,129 @@ export default class NostrConnector {
 
 
 
-    async payInvoice(nwc: string, invoice: string){
-        // const nwcData = nip47.parseConnectionString(nwc);
-        // const pubkey = nwcData.pubkey;
-        // const relay = nwcData.relay;
-        // this.addExtraRelays([relay]);
-        // const secretKey = nwcData.secret;
-        // const eventTemplate : EventTemplate = {
-        //     kind: Kinds.NWCWalletRequest,
-        //     content:  JSON.stringify({
-        //         method: "pay_invoice",
-        //         params: {
-        //             invoice
-        //         },
-        //     }),
-        //     created_at: Math.round(Date.now() / 1000),
-        //     tags:[
-        //         ["p", pubkey]
-        //     ]
-        // };
+   
+    async payInvoice(nwcData:{pubkey: string,relay: string, secret: string}, invoice:string ) :Promise<string>{
+        const pubkey = nwcData.pubkey;
+        const relay = nwcData.relay;
+        this.addExtraRelays([relay]);
 
-        // return this.sendEvent(eventTemplate, secretKey, pubkey); 
-    }
+        const secretKey = nwcData.secret;
+        const nwcUser = getPublicKey(hexToBytes(secretKey));
 
+        const eventTemplate: EventTemplate = {
+            kind: 23194,
+            content: JSON.stringify({
+                method: "pay_invoice",
+                params: {
+                    invoice: invoice,
+                },
+            }),
+            created_at: Math.round(Date.now() / 1000),
+            tags: [["p", pubkey]],
+        };
 
-    async makeInvoice(nwc: string, sats: number, desc:string, expiration:number ){
-        //   const nwcData = nip47.parseConnectionString(nwc);
-        //   const pubkey = nwcData.pubkey;
-        //   const relay = nwcData.relay;
-        //   this.addExtraRelays([relay]);
+        await Utils.encryptEvent(eventTemplate, secretKey);
+        const event = finalizeEvent(eventTemplate, hexToBytes(secretKey));
+      
+        const preimage = new Promise((res, rej) => {
+          const ww=this.pool.subscribeMany(
+              [relay],
+              [
+              {
+                  kinds: [23195],
+                  "#e": [event.id],
+                  "#p": [nwcUser],
+              },
+              ],
+              {
+                  onevent: async (event) => {
+                      try{
+                          await Utils.decryptEvent(event, hexToBytes(secretKey));
+                          const content= event.content;
+                          const contentData = JSON.parse(content);
+                          let invoice = contentData.result.preimage||"";
+                          ww.close();
+                          res(invoice);
+                      }catch(e){
+                          this.logger.error("Error processing nwc event", e);
+                          rej(e);
+                      }
+                  }
 
-        //   const secretKey = nwcData.secret;
+              }
+          );
+          setTimeout(()=>{
+              ww.close();
+              rej("timeout");
+          }, 1000*60*5); // TODO: configurable timeout
+      });
 
-        //   const eventTemplate: EventTemplate = {
-        //       kind: Kinds.NWCWalletRequest,
-        //       content: JSON.stringify({
-        //           method: "make_invoice",
-        //           params: {
-        //               amount: Math.floor(sats * 1000), // value in msats
-        //               description: desc, // invoice's description, optional
-        //               description_hash: "string", // invoice's description hash, optional
-        //               expiry: expiration?Math.floor(expiration/1000):undefined
-        //           },
-        //       }),
-        //       created_at: Math.round(Date.now() / 1000),
-        //       tags: [["p", pubkey]],
-        //   };
+        await this.sendEvent(event, false);
+        return await preimage as string;
+       
+  }
 
-        //   return this.sendEvent(eventTemplate, secretKey, pubkey); 
+    async makeInvoice(nwcData:{pubkey: string,relay: string, secret: string}, sats: number, desc:string, expiration:number ) :Promise<string>{
+          const pubkey = nwcData.pubkey;
+          const relay = nwcData.relay;
+          this.addExtraRelays([relay]);
+
+          const secretKey = nwcData.secret;
+
+          const eventTemplate: EventTemplate = {
+              kind: 23194,
+              content: JSON.stringify({
+                  method: "make_invoice",
+                  params: {
+                      amount: Math.floor(sats * 1000), // value in msats
+                      description: desc, // invoice's description, optional
+                    //  description_hash: "string", // invoice's description hash, optional
+                      expiry: expiration?Math.floor(expiration/1000):undefined
+                  },
+              }),
+              created_at: Math.round(Date.now() / 1000),
+              tags: [["p", pubkey]],
+          };
+
+          await Utils.encryptEvent(eventTemplate, secretKey);
+          const event = finalizeEvent(eventTemplate, hexToBytes(secretKey));
+        
+          const nwcUser = getPublicKey(hexToBytes(secretKey));
+          const invoice = new Promise((res, rej) => {
+            const ww=this.pool.subscribeMany(
+                [relay],
+                [
+                {
+                    kinds: [23195],
+                    "#e": [event.id],
+                    "#p": [nwcUser],
+                },
+                ],
+                {
+                    onevent: async (event) => {
+                        try{
+                            await Utils.decryptEvent(event, hexToBytes(secretKey));
+                            const content= event.content;
+                            const contentData = JSON.parse(content);
+                            let invoice = contentData.result.invoice||"";
+                            ww.close();
+                            res(invoice);
+                        }catch(e){
+                            this.logger.error("Error processing nwc event", e);
+                            rej(e);
+                        }
+                    }
+
+                }
+            );
+            setTimeout(()=>{
+                ww.close();
+                rej("timeout");
+            }, 1000*60*5); // TODO: configurable timeout
+        });
+
+          await this.sendEvent(event, false);
+          return await invoice as string;
+         
     }
 }

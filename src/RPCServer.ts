@@ -616,7 +616,8 @@ class RpcConnector implements IPoolConnector {
     async completeJob(request: RpcJobComplete, context: ServerCallContext): Promise<Job> {
         try {
             const nodeId = await this.getNodeId(context);
-            return this.conn.completeJob(nodeId, request.jobId, request.output);
+            const nwc = await this.getNWCData(context);
+            return this.conn.completeJob(nodeId, nwc, request.jobId, request.output);
         } catch (e) {
             this.logger.error(e);
             throw e;

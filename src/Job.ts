@@ -1,6 +1,6 @@
 import { Event } from "nostr-tools";
 
-import { Job as _Job, Payment, JobInput, Log, JobState, JobStatus, JobResult, JobParam,  PaymentStatus } from "openagents-grpc-proto";
+import { Job as _Job, Payment, JobInput, Log, JobState, JobStatus, JobResult, JobParam, Bid,  PaymentStatus } from "openagents-grpc-proto";
 
 import Utils from "./Utils";
 import {
@@ -54,7 +54,8 @@ export default class Job implements _Job {
     public encrypted: boolean = false;
     public userId: string = "";
     private minWorkers: number;
-    // public bid: Bid;
+    public bid: Bid;
+
 
     toJSON() {
         return {
@@ -79,7 +80,7 @@ export default class Job implements _Job {
             userId: this.userId,
             results: this.results,
             minWorkers: this.minWorkers,
-            // bid:this.bid
+            bid:this.bid
         };
     }
     constructor(
@@ -175,9 +176,11 @@ export default class Job implements _Job {
             const expectedOutputFormat: string =
                 Utils.getTagVars(event, ["output"])[0][0] || "application/json";
 
-            const bid = Utils.getTagVars(event, ["bid"])[0][0];
-            const t = Utils.getTagVars(event, ["t"])[0][0];
-            const bidproto="lightning";
+            const bidData = Utils.getTagVars(event, ["bid"])[0];
+            const bid = bidData[0];
+            const bidCurrency = bidData[1] || Utils.getTagVars(event, ["t"])[0][0] || "bitcoin";
+            const bidProto = bidData[2] || "lightning";
+           
 
             const description: string =
                 Utils.getTagVars(event, ["about"])[0][0] ||
@@ -245,11 +248,11 @@ export default class Job implements _Job {
             }
 
             // calculate bid for each worker
-            // this.bid={
-            //     amount: Number(bid) / minWorkers,
-            //     currency: t,
-            //     protocol: bidproto
-            // };
+            this.bid={
+                amount: Number(bid) / minWorkers,
+                currency: bidCurrency,
+                protocol: bidProto
+            };
 
         } else if (event.kind == 7000 || (event.kind >= 6000 && event.kind <= 6999)) {
             const e: Array<string> = Utils.getTagVars(event, ["e"])[0];
@@ -283,6 +286,7 @@ export default class Job implements _Job {
 
             const timestamp = Number(event.created_at) * 1000;
             const nodeId = Utils.getTagVars(event, ["d"])[0][0] || "";
+            const [paymentRequestAmount, paymentRequestInvoice, paymentRequestCurrency, paymentRequestProtocol ,..._] = Utils.getTagVars(event, ["amount"])[0];
 
             let state = this.results.find((s) => {
                 return s.acceptedByNode == nodeId && s.acceptedBy == provider;
@@ -297,65 +301,86 @@ export default class Job implements _Job {
                     timestamp: Date.now(),
                     result: { id: "", content: "", timestamp: 0 },
                     acceptedByNode: nodeId,
-                    // paymentRequests: [],
+                    paymentRequests: [],
                 };
                 this.results.push(state);
+            }
+
+            if(!state.paymentRequests.find(p=>p.id==paymentRequestInvoice)){
+                const totalRequested = state.paymentRequests.reduce((acc, p) => acc + p.amount, 0);
+                if(totalRequested + Number(paymentRequestAmount) <= this.bid.amount){
+                    state.paymentRequests.push({
+                        id: paymentRequestInvoice,
+                        amount: Number(paymentRequestAmount),
+                        currency: paymentRequestCurrency,
+                        protocol: paymentRequestProtocol,
+                        data: paymentRequestInvoice,
+                        status: PaymentStatus.PAYMENT_PENDING,
+                    });
+                }else{
+                    this.logger.error("Payment request exceeds bid amount");
+                }
             }
 
             if (event.kind == 7000) {
                 // TODO: content?
                 let [status, info] = Utils.getTagVars(event, ["status"])[0];
+                if(status=="paid"){
+                    // TODO
 
-                if (!info && status == "log") info = content;
+                }else{
 
-                if (info) {
-                    const log: Log = {
-                        nodeId,
-                        id: event.id,
-                        timestamp,
-                        log: info,
-                        level: status == "error" ? "error" : "info",
-                        source: provider,
-                    };
+                    if (!info && status == "log") info = content;
 
-                    const logs = state.logs;
-                    if (!logs.find((l) => l.id == log.id)) {
-                        let added = false;
-                        for (let i = 0; i < logs.length; i++) {
-                            if (logs[i].timestamp > timestamp) {
-                                logs.splice(i, 0, log);
-                                added = true;
-                                break;
+                    if (info) {
+                        const log: Log = {
+                            nodeId,
+                            id: event.id,
+                            timestamp,
+                            log: info,
+                            level: status == "error" ? "error" : "info",
+                            source: provider,
+                        };
+
+                        const logs = state.logs;
+                        if (!logs.find((l) => l.id == log.id)) {
+                            let added = false;
+                            for (let i = 0; i < logs.length; i++) {
+                                if (logs[i].timestamp > timestamp) {
+                                    logs.splice(i, 0, log);
+                                    added = true;
+                                    break;
+                                }
                             }
+                            if (!added) logs.push(log);
                         }
-                        if (!added) logs.push(log);
                     }
-                }
 
-                if (state.status != JobStatus.SUCCESS) {
-                    if (status == "success") {
-                        state.status = JobStatus.SUCCESS;
-                    } else if (status == "processing") {
-                        state.acceptedAt = timestamp;
-                        state.acceptedBy = provider;
-                        state.acceptedByNode = nodeId;
-                        state.status = JobStatus.PROCESSING;
-                    } else if (status == "error") {
-                        // state.acceptedAt = 0;
-                        // state.acceptedBy = "";
-                        state.status = JobStatus.ERROR;
+                    if (state.status != JobStatus.SUCCESS) {
+                        if (status == "success") {
+                            state.status = JobStatus.SUCCESS;
+                        } else if (status == "processing") {
+                            state.acceptedAt = timestamp;
+                            state.acceptedBy = provider;
+                            state.acceptedByNode = nodeId;
+                            state.status = JobStatus.PROCESSING;
+                        } else if (status == "error") {
+                            // state.acceptedAt = 0;
+                            // state.acceptedBy = "";
+                            state.status = JobStatus.ERROR;
+                        }
+                        state.timestamp = timestamp;
                     }
-                    state.timestamp = timestamp;
-                }
-            } else {
-                // result
-                // if (content=="") return;
-                if (!state.result.timestamp) {
-                    const result = state.result;
-                    if (result.timestamp < timestamp) {
-                        result.content = content;
-                        result.timestamp = timestamp;
-                        result.id = event.id;
+                } else {
+                    // result
+                    // if (content=="") return;
+                    if (!state.result.timestamp) {
+                        const result = state.result;
+                        if (result.timestamp < timestamp) {
+                            result.content = content;
+                            result.timestamp = timestamp;
+                            result.id = event.id;
+                        }
                     }
                 }
             }
@@ -422,7 +447,7 @@ export default class Job implements _Job {
                 timestamp: Date.now(),
                 result: { id: "", content: "", timestamp: 0 },
                 acceptedByNode: nodeId,
-                // paymentRequests: [],
+                paymentRequests: [],
             };
             this.results.push(state);
         } else {
@@ -499,9 +524,44 @@ export default class Job implements _Job {
         return [resultEvent];
     }
 
-    async complete(nodeId: string, pk: string, result: any, info?: string): Promise<Array<EventTemplate>> {
+    async paid(nodeId:string, pk:string, invoice:string, preimage:string){
+        const feedbackEvent: EventTemplate = {
+            kind: 7000,
+            content:  preimage,
+            created_at: Math.floor(Date.now() / 1000),
+            tags: [
+                ["status", "paid"],
+                ["e", this.id],
+                this.provider ? ["p", this.provider] : undefined,
+                ["expiration", "" + Math.floor(this.expiration / 1000)],
+                ["d", nodeId],
+                ["userid", this.userId],
+                this.encrypted ? ["encrypted", "true"] : undefined,
+            ].filter((t) => t),
+        };
+        return [feedbackEvent];
+    }
+
+    async complete(nodeId: string, pk: string, result: any, info?: string, invoicer?: (amount:number, currency:string, protocol:string) =>Promise<string>): Promise<Array<EventTemplate>> {
         const events: Array<EventTemplate> = [];
         events.push(...(await this.output(nodeId, pk, result)));
+
+        const paymentTags = [];
+        if(this.bid&&invoicer){            
+            if(invoicer){
+                let totalPaymentRequested=0;
+                const state = this.results.find((s) => {
+                    return s.acceptedByNode == nodeId&&s.acceptedBy==pk;
+                });
+                if (state) {
+                    totalPaymentRequested = state.paymentRequests.reduce((acc, p) => acc + p.amount, 0);
+                }
+                const amountToRequest = this.bid.amount - totalPaymentRequested;
+                const invoice = await invoicer(amountToRequest, this.bid.currency, this.bid.protocol);
+                paymentTags.push(["amount", amountToRequest, invoice, this.bid.currency, this.bid.protocol]);              
+            }
+        }
+
         const feedbackEvent: EventTemplate = {
             kind: 7000,
             content: info || "",
@@ -514,6 +574,7 @@ export default class Job implements _Job {
                 ["d", nodeId],
                 ["userid", this.userId],
                 this.encrypted ? ["encrypted", "true"] : undefined,
+                ...paymentTags,
             ].filter((t) => t),
         };
         events.push(feedbackEvent);
@@ -653,6 +714,7 @@ export default class Job implements _Job {
                 ["min-workers", "" + this.minWorkers],
                 ["d", this.nodeId],
                 this.encrypted ? ["encrypted", "true"] : undefined,
+                this.bid ? ["bid", "" + this.bid.amount, this.bid.currency, this.bid.protocol] : undefined,
             ].filter((t) => t),
         };
         // this.id = eventRequest.id;
