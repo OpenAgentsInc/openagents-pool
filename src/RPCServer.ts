@@ -69,7 +69,8 @@ import {
     RpcDiscoverPoolsRequest,
     RpcDiscoverPoolsResponse,
     Job,
-    RpcJobRequest
+    RpcJobRequest,
+    RpcPayJobRequest,
 } from "openagents-grpc-proto";
 import NostrConnector from "./NostrConnector";
 
@@ -439,13 +440,16 @@ class RpcConnector implements IPoolConnector {
         }
     }
 
-    async getNWCData(context: ServerCallContext): Promise<{
-        pubkey: string;
-        relay: string;
-        secret: string;
-    }|undefined> {
+    async getNWCData(context: ServerCallContext): Promise<
+        | {
+              pubkey: string;
+              relay: string;
+              secret: string;
+          }
+        | undefined
+    > {
         const nwc = (await context.headers["nwc-data"]) as string;
-        if(!nwc) return undefined;
+        if (!nwc) return undefined;
         const nwcData = JSON.parse(nwc);
         return {
             pubkey: nwcData.pubkey,
@@ -466,9 +470,29 @@ class RpcConnector implements IPoolConnector {
     async getJob(request: RpcGetJob, context: ServerCallContext): Promise<Job> {
         try {
             const nodeId = await this.getNodeId(context);
+            const nwc= await this.getNWCData(context);
             const id = request.jobId;
-            let job = undefined;
+            let job:Job|undefined = undefined;
             const nResults = request.nResultsToWait || 1;
+            
+            
+            const pay=async (job:Job)=>{
+                if(!job)return;
+                const streamPayment = request.streamPayment;
+                const streamPaymentCurrency = request.streamPaymentCurrency || "bitcoin";
+                const streamPaymentProtocol = request.streamPaymentProtocol || "lightning";
+                if (streamPayment) {
+                    await this.conn.payJob(
+                        nodeId,
+                        nwc,
+                        job.id,
+                        streamPayment,
+                        streamPaymentCurrency,
+                        streamPaymentProtocol
+                    );
+                }
+            };
+
             if (request.wait) {
                 job = await Utils.busyWaitForSomething(
                     async () => {
@@ -482,8 +506,9 @@ class RpcConnector implements IPoolConnector {
                                 } else if (state.status == JobStatus.ERROR) {
                                     errors++;
                                 }
+                                
                             }
-
+                            await pay(job);
                             const isDone = results >= nResults;
                             if (isDone) return job;
                         } catch (e) {}
@@ -496,7 +521,23 @@ class RpcConnector implements IPoolConnector {
                 );
             }
             if (!job) job = await this.conn.getJob(nodeId, id);
+            
+            await pay(job);
+
             return job;
+        } catch (e) {
+            this.logger.error(e);
+            throw e;
+        }
+    }
+
+    async isJobDone(request: RpcGetJob, context: ServerCallContext): Promise<RpcIsJobDone> {
+        try {        
+            const job = await this.getJob(request, context);
+            const isDone = !!(job && job.state.status == JobStatus.SUCCESS && job.result.timestamp);            
+            return {
+                isDone
+            };
         } catch (e) {
             this.logger.error(e);
             throw e;
@@ -512,6 +553,8 @@ class RpcConnector implements IPoolConnector {
             const descriptionFilter: RegExp = new RegExp(request.filterByDescription || ".*");
             const kindFilter: RegExp = new RegExp(request.filterByKind || ".*");
             const excludeIds: string[] = request.excludeId || [];
+            const bidFilter = request.filterByBids || [];
+
 
             const findJobs = async () => {
                 return await this.conn.findJobs(
@@ -521,6 +564,7 @@ class RpcConnector implements IPoolConnector {
                     descriptionFilter,
                     customerFilter,
                     kindFilter,
+                    bidFilter?.length > 0 ? bidFilter : undefined,
                     true,
                     excludeIds
                 );
@@ -544,39 +588,6 @@ class RpcConnector implements IPoolConnector {
                 jobs,
             };
             return pendingJobs;
-        } catch (e) {
-            this.logger.error(e);
-            throw e;
-        }
-    }
-
-    async isJobDone(request: RpcGetJob, context: ServerCallContext): Promise<RpcIsJobDone> {
-        try {
-            const nodeId = await this.getNodeId(context);
-            let isDone = false;
-            if (request.wait) {
-                isDone = await Utils.busyWaitForSomething(
-                    async () => {
-                        try {
-                            const job = await this.getJob(request, context);
-                            const isDone =
-                                job && job.state.status == JobStatus.SUCCESS && job.result.timestamp;
-                            if (isDone) return true;
-                        } catch (e) {}
-                        return undefined;
-                    },
-                    () => {
-                        return false;
-                    },
-                    request.wait
-                );
-            } else {
-                const job = await this.getJob(request, context);
-                isDone = job && job.state.status == JobStatus.SUCCESS && job.result.timestamp > 0;
-            }
-            return {
-                isDone,
-            };
         } catch (e) {
             this.logger.error(e);
             throw e;
@@ -613,10 +624,29 @@ class RpcConnector implements IPoolConnector {
         }
     }
 
+    async payJob(request: RpcPayJobRequest, context: ServerCallContext): Promise<Job> {
+        try {
+            const nodeId = await this.getNodeId(context);
+            const nwc = await this.getNWCData(context);
+            return await this.conn.payJob(
+                nodeId,
+                nwc,
+                request.jobId,
+                request.amount,
+                request.currency,
+                request.protocol
+            );
+        } catch (e) {
+            this.logger.error(e);
+            throw e;
+        }
+    }
+
     async completeJob(request: RpcJobComplete, context: ServerCallContext): Promise<Job> {
         try {
             const nodeId = await this.getNodeId(context);
-            return this.conn.completeJob(nodeId, request.jobId, request.output);
+            const nwc = await this.getNWCData(context);
+            return this.conn.completeJob(nodeId, nwc, request.jobId, request.output);
         } catch (e) {
             this.logger.error(e);
             throw e;

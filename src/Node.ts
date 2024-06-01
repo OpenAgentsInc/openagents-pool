@@ -154,10 +154,7 @@ export default class Node  {
         // remove expired templates
         const now = Date.now();
         this.eventRegistration = this.eventRegistration.filter((reg) => {
-            if (now - reg.timestamp > this.announcementTimeout) {
-                return false;
-            }
-            return true;
+            return now - reg.timestamp <= duration;
         });
 
         // build announcement event
