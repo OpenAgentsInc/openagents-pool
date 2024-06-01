@@ -11,7 +11,8 @@ import {
     useWebSocketImplementation,
     verifiedSymbol,
     nip47,
-    nip04
+    nip04,
+    Relay
 } from "nostr-tools";
 import { Bid, PaymentStatus } from "openagents-grpc-proto";
 // import Kinds from 'nostr-tools/lib/types/kinds';
@@ -306,7 +307,7 @@ export default class NostrConnector {
                     this.addExtraRelays(job.relays);
                     this.callWebHooks("Job", job);
                 });
-            } else if (event.kind >= 6000 && event.kind <= 7000) {
+            } else if (event.kind >= 6000 && event.kind <= 7001) {
                 this.logger.log("Received event", event);
                 const e: string = Utils.getTagVars(event, ["e"])[0][0];
                 if (!e) throw new Error("Event missing e tag");
@@ -571,6 +572,7 @@ export default class NostrConnector {
         descriptionFilter: RegExp,
         customerFilter: RegExp,
         kindFilter: RegExp,
+        bidFilter: Bid[],
         isAvailable: boolean,
         excludeIds?: string[]
     ): Promise<Array<Job>> {
@@ -589,6 +591,16 @@ export default class NostrConnector {
                 customerFilter.test(job.customerPublicKey) &&
                 kindFilter.test(job.kind.toString())
             ) {
+                if (bidFilter){
+                    if(!job.bid)continue;
+                    const validBidFilters = bidFilter.find((bidFilter:Bid) => {
+                        if (bidFilter.amount > job.bid.amount) return false;
+                        if (bidFilter.currency != job.bid.currency) return false;
+                        if (bidFilter.protocol != job.bid.protocol) return false;
+                        return true;
+                    });
+                    if(!validBidFilters)continue;
+                }                    
                 jobs.push(job);
             }
         }
@@ -1084,31 +1096,32 @@ export default class NostrConnector {
         nwcData: { pubkey: string; relay: string; secret: string },
         invoice: string
     ): Promise<string> {
-        const pubkey = nwcData.pubkey;
-        const relay = nwcData.relay;
-        this.addExtraRelays([relay]);
 
-        const secretKey = nwcData.secret;
-        const nwcUser = getPublicKey(hexToBytes(secretKey));
+        const relay = await Relay.connect(nwcData.relay);
 
-        const eventTemplate: EventTemplate = {
-            kind: 23194,
-            content: JSON.stringify({
+        const content = {
+            method: "make_invoice",
+            params: {
                 method: "pay_invoice",
                 params: {
                     invoice: invoice,
                 },
-            }),
+            },
+        };
+        const encryptedContent = await nip04.encrypt(nwcData.secret, nwcData.pubkey, JSON.stringify(content));
+
+       
+        const eventTemplate: EventTemplate = {
+            kind: 23194,
+            content: encryptedContent,
             created_at: Math.round(Date.now() / 1000),
-            tags: [["p", pubkey]],
+            tags: [["p", nwcData.pubkey]],
         };
 
-        await Utils.encryptEvent(eventTemplate, secretKey);
-        const event = finalizeEvent(eventTemplate, hexToBytes(secretKey));
-
+        const event = finalizeEvent(eventTemplate, hexToBytes(nwcData.secret));
+        const nwcUser = getPublicKey(hexToBytes(nwcData.secret));
         const preimage = new Promise((res, rej) => {
-            const ww = this.pool.subscribeMany(
-                [relay],
+            const sub = relay.subscribe(
                 [
                     {
                         kinds: [23195],
@@ -1119,12 +1132,18 @@ export default class NostrConnector {
                 {
                     onevent: async (event) => {
                         try {
-                            await Utils.decryptEvent(event, hexToBytes(secretKey));
-                            const content = event.content;
-                            const contentData = JSON.parse(content);
-                            let invoice = contentData.result.preimage || "";
-                            ww.close();
-                            res(invoice);
+                            const encryptedContent = event.content;
+
+                            const decryptedContent = await nip04.decrypt(
+                                nwcData.secret,
+                                nwcData.pubkey,
+                                encryptedContent
+                            );
+                    
+                            const contentData = JSON.parse(decryptedContent);
+                            let preimage = contentData.result.preimage || "";
+                            sub.close();
+                            res(preimage);
                         } catch (e) {
                             this.logger.error("Error processing nwc event", e);
                             rej(e);
@@ -1134,51 +1153,51 @@ export default class NostrConnector {
             );
             setTimeout(
                 () => {
-                    ww.close();
+                    sub.close();
                     rej("timeout");
                 },
                 1000 * 60 * 5
             ); // TODO: configurable timeout
         });
 
-        await this.sendEvent(event, false);
-        return (await preimage) as string;
+        await relay.publish(event);
+        const out= (await preimage) as string;
+        relay.close();
+        return out;
+
     }
 
     async makeInvoice(
         nwcData: { pubkey: string; relay: string; secret: string },
-        sats: number,
+        msats: number,
         desc: string,
         expiration: number
     ): Promise<string> {
-        const pubkey = nwcData.pubkey;
-        const relay = nwcData.relay;
-        this.addExtraRelays([relay]);
+        const relay = await Relay.connect(nwcData.relay);
 
-        const secretKey = nwcData.secret;
+
+        const content = {
+            method: "make_invoice",
+            params: {
+                amount: Math.floor(msats), // value in msats
+                description: desc || "OpenAgents", // invoice's description, optional
+                //  description_hash: "string", // invoice's description hash, optional
+                expiry: expiration ? Math.floor(expiration / 1000) : undefined,
+            },
+        };
+        const encryptedContent = await nip04.encrypt(nwcData.secret, nwcData.pubkey, JSON.stringify(content));
 
         const eventTemplate: EventTemplate = {
             kind: 23194,
-            content: JSON.stringify({
-                method: "make_invoice",
-                params: {
-                    amount: Math.floor(sats * 1000), // value in msats
-                    description: desc, // invoice's description, optional
-                    //  description_hash: "string", // invoice's description hash, optional
-                    expiry: expiration ? Math.floor(expiration / 1000) : undefined,
-                },
-            }),
+            content: encryptedContent,
             created_at: Math.round(Date.now() / 1000),
-            tags: [["p", pubkey]],
+            tags: [["p", nwcData.pubkey]],
         };
-
-        await Utils.encryptEvent(eventTemplate, secretKey);
-        const event = finalizeEvent(eventTemplate, hexToBytes(secretKey));
-
-        const nwcUser = getPublicKey(hexToBytes(secretKey));
+       
+        const event = finalizeEvent(eventTemplate, hexToBytes(nwcData.secret));
+        const nwcUser = getPublicKey(hexToBytes(nwcData.secret));
         const invoice = new Promise((res, rej) => {
-            const ww = this.pool.subscribeMany(
-                [relay],
+            const sub = relay.subscribe(
                 [
                     {
                         kinds: [23195],
@@ -1189,11 +1208,17 @@ export default class NostrConnector {
                 {
                     onevent: async (event) => {
                         try {
-                            await Utils.decryptEvent(event, hexToBytes(secretKey));
-                            const content = event.content;
-                            const contentData = JSON.parse(content);
+                            const encryptedContent = event.content;
+
+                            const decryptedContent = await nip04.decrypt(
+                                nwcData.secret,
+                                nwcData.pubkey,
+                                encryptedContent
+                            );
+
+                            const contentData = JSON.parse(decryptedContent);
                             let invoice = contentData.result.invoice || "";
-                            ww.close();
+                            sub.close();
                             res(invoice);
                         } catch (e) {
                             this.logger.error("Error processing nwc event", e);
@@ -1204,14 +1229,17 @@ export default class NostrConnector {
             );
             setTimeout(
                 () => {
-                    ww.close();
+                    sub.close();
                     rej("timeout");
                 },
                 1000 * 60 * 5
             ); // TODO: configurable timeout
         });
 
-        await this.sendEvent(event, false);
-        return (await invoice) as string;
+        await relay.publish(event);
+    
+        const out = (await invoice) as string;
+        relay.close();
+        return out;
     }
 }
