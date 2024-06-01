@@ -112,6 +112,10 @@ export default class JsonAuth extends Auth {
             jobEvent = true;
             if(await  this.isNodeAuthorized("submitJobFeedbackEvent", event.pubkey))return true;
         }
+        if (kind == 7001) {
+            jobEvent = true;
+            if (await this.isNodeAuthorized("submitCustomerFeedbackEvent", event.pubkey)) return true;
+        }
         if(jobEvent){
             if(await  this.isNodeAuthorized("submitJobEvent", event.pubkey))return true;
         }

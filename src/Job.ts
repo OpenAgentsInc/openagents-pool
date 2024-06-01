@@ -153,7 +153,7 @@ export default class Job implements _Job {
 
             const provider: string = Utils.getTagVars(event, ["p"])[0][0];
             if (this.provider && provider && provider != this.provider) {
-                this.logger.error("Invalid provider");
+                this.logger.error("Invalid provider", provider, this.provider);
                 return;
             }
 
@@ -171,7 +171,7 @@ export default class Job implements _Job {
             );
             const nodeId = Utils.getTagVars(event, ["d"])[0][0] || "";
             const encrypted = Utils.getTagVars(event, ["encrypted"])[0][0] == "true";
-            const minWorkers = Number(Utils.getTagVars(event, ["min-workers"])[0][0]) || 2;
+            const minWorkers = Number(Utils.getTagVars(event, ["min-workers"])[0][0]) || 1;
 
             const relays: Array<string> = Utils.getTagVars(event, ["relays"])[0] || defaultRelays;
             const expectedOutputFormat: string =
@@ -270,7 +270,7 @@ export default class Job implements _Job {
 
             const provider: string = event.pubkey;
             if (this.provider && provider != this.provider) {
-                this.logger.error("Invalid provider");
+                this.logger.error("Invalid provider", provider, this.provider);
                 return;
             }
 
@@ -310,7 +310,7 @@ export default class Job implements _Job {
                 this.results.push(state);
             }
 
-            if(!state.paymentRequests.find(p=>p.id==paymentRequestInvoice)){
+            if(paymentRequestAmount&&!state.paymentRequests.find(p=>p.id==paymentRequestInvoice)){
                 const totalRequested = state.paymentRequests.reduce((acc, p) => acc + p.amount, 0);
                 if(totalRequested + Number(paymentRequestAmount) <= this.bid.amount){
                     state.paymentRequests.push({
@@ -322,38 +322,14 @@ export default class Job implements _Job {
                         status: PaymentStatus.PAYMENT_PENDING,
                     });
                 }else{
-                    this.logger.error("Payment request exceeds bid amount");
+                    this.logger.error("Payment request exceeds bid amount", totalRequested, paymentRequestAmount, this.bid.amount);
                 }
             }
 
             if (event.kind == 7000) {
                 // TODO: content?
                 let [status, info] = Utils.getTagVars(event, ["status"])[0];
-                if(status=="paid"){
-                    const proofTag= Utils.getTagVars(event, ["proof"])[0];
-                    if (proofTag) {
-                        const [amount, invoice, currency, protocol, preimage] = proofTag;
-                        const paymentRequest = state.paymentRequests.find(p=>p.id==invoice);
-                        if(paymentRequest){
-                            if(protocol=="lightning"){
-                                const lnInvoice = new LNInvoice({pr:invoice, preimage});
-                                if (lnInvoice.satoshi!=Number(amount)) this.logger.error("Invalid payment amount");
-                                else if (lnInvoice.isPaid()) {
-                                    paymentRequest.status = PaymentStatus.PAYMENT_RECEIVED;
-                                    paymentRequest.proof = preimage;
-                                    this.logger.info("Payment received");
-                                } else {
-                                    this.logger.error("Payment proof is invalid!");
-                                }
-                            }else{
-                                this.logger.error("Unsupported payment protocol");
-                            }
-                           
-                        }else{
-                            this.logger.error("Payment request not found");                        
-                        }
-                    }
-                }else{
+          
 
                     if (!info && status == "log") info = content;
 
@@ -397,7 +373,7 @@ export default class Job implements _Job {
                         state.timestamp = timestamp;
                     }
               
-                }
+                
               } else {
                     // result
                     // if (content=="") return;
@@ -417,6 +393,67 @@ export default class Job implements _Job {
             // ) {
             //     this.state = state;
             // }
+        } else if(event.kind==7001){
+            const e: Array<string> = Utils.getTagVars(event, ["e"])[0];
+            const jobId: string = e[0];
+            if (!jobId) throw new Error("No job id");
+            if (this.id != jobId) throw new Error("Invalid id " + jobId + " != " + this.id);
+
+            const provider: string = Utils.getTagVars(event, ["p"])[0][0];
+            if (this.provider && provider != this.provider) {
+                this.logger.error("Invalid provider", provider, this.provider);
+                return;
+            }
+
+            if (event.pubkey != this.customerPublicKey) {
+                throw new Error("Invalid customer");
+            }
+
+            const content: string = event.content;
+
+            const relayHint: string | undefined = e[1];
+            if (relayHint) {
+                if (!this.relays.includes(relayHint)) {
+                    this.relays.push(relayHint);
+                }
+            }
+            // const timestamp = Number(event.created_at) * 1000;
+            // const nodeId = Utils.getTagVars(event, ["d"])[0][0] || "";
+
+            let [status, info] = Utils.getTagVars(event, ["status"])[0];
+            if (status == "payment") {
+                const proofTag = Utils.getTagVars(event, ["proof"])[0];
+                if (proofTag) {
+                    const [amount, invoice, currency, protocol, preimage] = proofTag;
+                    for (const state of this.results) {
+                        const paymentRequest = state.paymentRequests.find((p) => p.id == invoice);
+                        if (paymentRequest) {
+                            if (protocol == "lightning") {
+                                const lnInvoice = new LNInvoice({ pr: invoice, preimage });
+                                this.logger.finest("Paid invoice", lnInvoice)
+                                if (Math.floor(lnInvoice.satoshi*1000) != Number(amount))
+                                    this.logger.error("Invalid payment amount");
+                                else if (lnInvoice.isPaid()) {
+                                    paymentRequest.status = PaymentStatus.PAYMENT_RECEIVED;
+                                    paymentRequest.proof = preimage;
+                                    this.logger.fine("Payment received");
+                                } else {
+                                    this.logger.error("Payment proof is invalid!");
+                                }
+                            } else {
+                                this.logger.error("Unsupported payment protocol");
+                            }
+                            break;
+                        }
+                    }
+                }
+            } else {
+                if (!info && status == "log") info = content;
+
+                if (info) {
+                    this.logger.info("Customer feedback", info);
+                }
+            }
         }
     }
 
@@ -557,7 +594,7 @@ export default class Job implements _Job {
             content: "",
             created_at: Math.floor(Date.now() / 1000),
             tags: [
-                ["status", "paid"],
+                ["status", "payment"],
                 ["e", this.id],
                 this.provider ? ["p", this.provider] : undefined,
                 ["expiration", "" + Math.floor(this.expiration / 1000)],
@@ -586,7 +623,7 @@ export default class Job implements _Job {
                 }
                 const amountToRequest = this.bid.amount - totalPaymentRequested;
                 const invoice = await invoicer(amountToRequest, this.bid.currency, this.bid.protocol);
-                paymentTags.push(["amount", amountToRequest, invoice, this.bid.currency, this.bid.protocol]);              
+                paymentTags.push(["amount",""+ amountToRequest, invoice, this.bid.currency, this.bid.protocol]);              
             }
         }
 

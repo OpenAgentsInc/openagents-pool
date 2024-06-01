@@ -109,7 +109,7 @@ export default class Utils {
                 const encryptedPayload = event.content;
                 const decryptedPayload = await nip04.decrypt(secret, event.pubkey, encryptedPayload);
                 event.content = decryptedPayload;
-            } else if (kind == 7000) {
+            } else if (kind == 7000 || kind == 7001) {
                 const encryptedPayload = event.content;
                 const decryptedPayload = await nip04.decrypt(secret, event.pubkey, encryptedPayload);
                 event.content = decryptedPayload;

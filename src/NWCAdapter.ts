@@ -30,7 +30,6 @@ export default class NWCAdapter {
                             const nwcData = Utils.parseNWC(nwc);
                             if (nwcData){
                                 call.metadata.set("nwc-data", JSON.stringify(nwcData));
-                                if (nwcData.relay) this.conn.addExtraRelays([nwcData.relay]);                       
                             }
                         }                      
                         methodImplementation(call, callback);
