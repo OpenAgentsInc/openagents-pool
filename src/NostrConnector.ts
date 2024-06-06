@@ -1073,10 +1073,12 @@ export default class NostrConnector {
                     )
                         continue;
                     const actionClone = JSON.parse(JSON.stringify(action));
-                    let actionId = JSON.stringify([action.template, action.sockets, action.meta]);
-                    actionId = Utils.uuidFrom(actionId);
-                    actionClone.meta.id = actionId;
-                    actions.set(actionId, actionClone);
+                    if (!actionClone.meta.id){
+                        let actionId = JSON.stringify([action.template, action.sockets, action.meta]);
+                        actionId = Utils.uuidFrom(actionId);                        
+                        actionClone.meta.id = actionId;
+                    }
+                    actions.set(actionClone.meta.id, actionClone);
                 } catch (e) {
                     this.logger.finest("Error filtering discovered action", e);
                 }
