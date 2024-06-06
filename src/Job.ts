@@ -1,7 +1,7 @@
 import { Event } from "nostr-tools";
 import {Invoice as LNInvoice} from "@getalby/lightning-tools"
 
-import { Job as _Job, Payment, JobInput, Log, JobState, JobStatus, JobResult, JobParam, Bid,  PaymentStatus } from "openagents-grpc-proto";
+import { Job as _Job,  JobInput, Log, JobState, JobStatus, JobResult, JobParam, Payment,  PaymentStatus } from "openagents-grpc-proto";
 
 import Utils from "./Utils";
 import {
@@ -55,8 +55,7 @@ export default class Job implements _Job {
     public encrypted: boolean = false;
     public userId: string = "";
     private minWorkers: number;
-    public bid: Bid;
-
+    public bid: Payment;
 
     toJSON() {
         return {
@@ -81,7 +80,7 @@ export default class Job implements _Job {
             userId: this.userId,
             results: this.results,
             minWorkers: this.minWorkers,
-            bid:this.bid
+            bid: this.bid,
         };
     }
     constructor(
@@ -178,8 +177,6 @@ export default class Job implements _Job {
                 Utils.getTagVars(event, ["output"])[0][0] || "application/json";
 
             const bidData = Utils.getTagVars(event, ["bid"])[0];
-      
-           
 
             const description: string =
                 Utils.getTagVars(event, ["about"])[0][0] ||
@@ -247,17 +244,16 @@ export default class Job implements _Job {
             }
 
             // calculate bid for each worker
-            if(bidData){
+            if (bidData) {
                 const bid = bidData[0];
                 const bidCurrency = bidData[1] || Utils.getTagVars(event, ["t"])[0][0] || "bitcoin";
                 const bidProto = bidData[2] || "lightning";
-                this.bid={
+                this.bid = {
                     amount: Number(bid) / minWorkers,
                     currency: bidCurrency,
-                    protocol: bidProto
+                    protocol: bidProto,
                 };
             }
-
         } else if (event.kind == 7000 || (event.kind >= 6000 && event.kind <= 6999)) {
             const e: Array<string> = Utils.getTagVars(event, ["e"])[0];
             const jobId: string = e[0];
@@ -290,7 +286,13 @@ export default class Job implements _Job {
 
             const timestamp = Number(event.created_at) * 1000;
             const nodeId = Utils.getTagVars(event, ["d"])[0][0] || "";
-            const [paymentRequestAmount, paymentRequestInvoice, paymentRequestCurrency, paymentRequestProtocol ,..._] = Utils.getTagVars(event, ["amount"])[0];
+            const [
+                paymentRequestAmount,
+                paymentRequestInvoice,
+                paymentRequestCurrency,
+                paymentRequestProtocol,
+                ..._
+            ] = Utils.getTagVars(event, ["amount"])[0];
 
             let state = this.results.find((s) => {
                 return s.acceptedByNode == nodeId && s.acceptedBy == provider;
@@ -310,9 +312,9 @@ export default class Job implements _Job {
                 this.results.push(state);
             }
 
-            if(paymentRequestAmount&&!state.paymentRequests.find(p=>p.id==paymentRequestInvoice)){
+            if (paymentRequestAmount && !state.paymentRequests.find((p) => p.id == paymentRequestInvoice)) {
                 const totalRequested = state.paymentRequests.reduce((acc, p) => acc + p.amount, 0);
-                if(totalRequested + Number(paymentRequestAmount) <= this.bid.amount){
+                if (totalRequested + Number(paymentRequestAmount) <= this.bid.amount) {
                     state.paymentRequests.push({
                         id: paymentRequestInvoice,
                         amount: Number(paymentRequestAmount),
@@ -321,71 +323,73 @@ export default class Job implements _Job {
                         data: paymentRequestInvoice,
                         status: PaymentStatus.PAYMENT_PENDING,
                     });
-                }else{
-                    this.logger.error("Payment request exceeds bid amount", totalRequested, paymentRequestAmount, this.bid.amount);
+                } else {
+                    this.logger.error(
+                        "Payment request exceeds bid amount",
+                        totalRequested,
+                        paymentRequestAmount,
+                        this.bid.amount
+                    );
                 }
             }
 
             if (event.kind == 7000) {
                 // TODO: content?
                 let [status, info] = Utils.getTagVars(event, ["status"])[0];
-          
 
-                    if (!info && status == "log") info = content;
+                if (!info && status == "log") info = content;
 
-                    if (info) {
-                        const log: Log = {
-                            nodeId,
-                            id: event.id,
-                            timestamp,
-                            log: info,
-                            level: status == "error" ? "error" : "info",
-                            source: provider,
-                        };
+                if (info) {
+                    const log: Log = {
+                        nodeId,
+                        id: event.id,
+                        timestamp,
+                        log: info,
+                        level: status == "error" ? "error" : "info",
+                        source: provider,
+                    };
 
-                        const logs = state.logs;
-                        if (!logs.find((l) => l.id == log.id)) {
-                            let added = false;
-                            for (let i = 0; i < logs.length; i++) {
-                                if (logs[i].timestamp > timestamp) {
-                                    logs.splice(i, 0, log);
-                                    added = true;
-                                    break;
-                                }
+                    const logs = state.logs;
+                    if (!logs.find((l) => l.id == log.id)) {
+                        let added = false;
+                        for (let i = 0; i < logs.length; i++) {
+                            if (logs[i].timestamp > timestamp) {
+                                logs.splice(i, 0, log);
+                                added = true;
+                                break;
                             }
-                            if (!added) logs.push(log);
                         }
-                    }
-
-                    if (state.status != JobStatus.SUCCESS) {
-                        if (status == "success") {
-                            state.status = JobStatus.SUCCESS;
-                        } else if (status == "processing") {
-                            state.acceptedAt = timestamp;
-                            state.acceptedBy = provider;
-                            state.acceptedByNode = nodeId;
-                            state.status = JobStatus.PROCESSING;
-                        } else if (status == "error") {
-                            // state.acceptedAt = 0;
-                            // state.acceptedBy = "";
-                            state.status = JobStatus.ERROR;
-                        }
-                        state.timestamp = timestamp;
-                    }
-              
-                
-              } else {
-                    // result
-                    // if (content=="") return;
-                    if (!state.result.timestamp) {
-                        const result = state.result;
-                        if (result.timestamp < timestamp) {
-                            result.content = content;
-                            result.timestamp = timestamp;
-                            result.id = event.id;
-                        }
+                        if (!added) logs.push(log);
                     }
                 }
+
+                if (state.status != JobStatus.SUCCESS) {
+                    if (status == "success") {
+                        state.status = JobStatus.SUCCESS;
+                    } else if (status == "processing") {
+                        state.acceptedAt = timestamp;
+                        state.acceptedBy = provider;
+                        state.acceptedByNode = nodeId;
+                        state.status = JobStatus.PROCESSING;
+                    } else if (status == "error") {
+                        // state.acceptedAt = 0;
+                        // state.acceptedBy = "";
+                        state.status = JobStatus.ERROR;
+                    }
+                    state.timestamp = timestamp;
+                }
+            } else {
+                // result
+                // if (content=="") return;
+                if (!state.result.timestamp) {
+                    const result = state.result;
+                    if (result.timestamp < timestamp) {
+                        result.content = content;
+                        result.timestamp = timestamp;
+                        result.id = event.id;
+                    }
+                }
+            }
 
             // if (
             //     this.state.status == JobStatus.UNKNOWN ||
@@ -393,7 +397,7 @@ export default class Job implements _Job {
             // ) {
             //     this.state = state;
             // }
-        } else if(event.kind==7001){
+        } else if (event.kind == 7001) {
             const e: Array<string> = Utils.getTagVars(event, ["e"])[0];
             const jobId: string = e[0];
             if (!jobId) throw new Error("No job id");
@@ -430,8 +434,8 @@ export default class Job implements _Job {
                         if (paymentRequest) {
                             if (protocol == "lightning") {
                                 const lnInvoice = new LNInvoice({ pr: invoice, preimage });
-                                this.logger.finest("Paid invoice", lnInvoice)
-                                if (Math.floor(lnInvoice.satoshi*1000) != Number(amount))
+                                this.logger.finest("Paid invoice", lnInvoice);
+                                if (Math.floor(lnInvoice.satoshi * 1000) != Number(amount))
                                     this.logger.error("Invalid payment amount");
                                 else if (lnInvoice.isPaid()) {
                                     paymentRequest.status = PaymentStatus.PAYMENT_RECEIVED;
@@ -587,7 +591,14 @@ export default class Job implements _Job {
         return [resultEvent];
     }
 
-    async pay(nodeId:string,  amount:number, invoice:string, currency:string, protocol:string, payer:(invoice:string, amount:number, currency:string, protocol:string)=>Promise<string>):Promise<Array<EventTemplate>>{
+    async pay(
+        nodeId: string,
+        amount: number,
+        invoice: string,
+        currency: string,
+        protocol: string,
+        payer: (invoice: string, amount: number, currency: string, protocol: string) => Promise<string>
+    ): Promise<Array<EventTemplate>> {
         const proof = await payer(invoice, amount, currency, protocol);
         const feedbackEvent: EventTemplate = {
             kind: 7000,
@@ -600,30 +611,42 @@ export default class Job implements _Job {
                 ["expiration", "" + Math.floor(this.expiration / 1000)],
                 ["d", nodeId],
                 ["userid", this.userId],
-                ["proof", ""+amount, invoice, currency, protocol, proof],
+                ["proof", "" + amount, invoice, currency, protocol, proof],
                 this.encrypted ? ["encrypted", "true"] : undefined,
             ].filter((t) => t),
         };
         return [feedbackEvent];
     }
 
-    async complete(nodeId: string, pk: string, result: any, info?: string, invoicer?: (amount:number, currency:string, protocol:string) =>Promise<string>): Promise<Array<EventTemplate>> {
+    async complete(
+        nodeId: string,
+        pk: string,
+        result: any,
+        info?: string,
+        invoicer?: (amount: number, currency: string, protocol: string) => Promise<string>
+    ): Promise<Array<EventTemplate>> {
         const events: Array<EventTemplate> = [];
         events.push(...(await this.output(nodeId, pk, result)));
 
         const paymentTags = [];
-        if(this.bid&&invoicer){            
-            if(invoicer){
-                let totalPaymentRequested=0;
+        if (this.bid && invoicer) {
+            if (invoicer) {
+                let totalPaymentRequested = 0;
                 const state = this.results.find((s) => {
-                    return s.acceptedByNode == nodeId&&s.acceptedBy==pk;
+                    return s.acceptedByNode == nodeId && s.acceptedBy == pk;
                 });
                 if (state) {
                     totalPaymentRequested = state.paymentRequests.reduce((acc, p) => acc + p.amount, 0);
                 }
                 const amountToRequest = this.bid.amount - totalPaymentRequested;
                 const invoice = await invoicer(amountToRequest, this.bid.currency, this.bid.protocol);
-                paymentTags.push(["amount",""+ amountToRequest, invoice, this.bid.currency, this.bid.protocol]);              
+                paymentTags.push([
+                    "amount",
+                    "" + amountToRequest,
+                    invoice,
+                    this.bid.currency,
+                    this.bid.protocol,
+                ]);
             }
         }
 
@@ -646,18 +669,17 @@ export default class Job implements _Job {
 
         // request payment
         // if(this.bid){
-            // create invoice
-            // const nodeNwc;
-            // const payment: Payment = {
-            //     id: "",
-            //     amount: this.bid.amount,
-            //     currency: this.bid.currency,
-            //     protocol: this.bid.protocol,
-            //     data: "invoice",
-            //     status: PaymentStatus.PAYMENT_PENDING                
-            // };
+        // create invoice
+        // const nodeNwc;
+        // const payment: Payment = {
+        //     id: "",
+        //     amount: this.bid.amount,
+        //     currency: this.bid.currency,
+        //     protocol: this.bid.protocol,
+        //     data: "invoice",
+        //     status: PaymentStatus.PAYMENT_PENDING
+        // };
 
-            
         // }
 
         // this.state.status = JobStatus.SUCCESS;
@@ -665,9 +687,8 @@ export default class Job implements _Job {
         return events;
     }
 
-
     // getBid(){
-        // return this.bid;
+    // return this.bid;
     // }
 
     async log(nodeId: string, pk: string, log: string): Promise<Array<EventTemplate>> {

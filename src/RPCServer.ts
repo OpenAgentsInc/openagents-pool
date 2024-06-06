@@ -71,6 +71,8 @@ import {
     Job,
     RpcJobRequest,
     RpcPayJobRequest,
+    RpcRequestPayment,
+    RpcRequestPaymentResponse,
 } from "openagents-grpc-proto";
 import NostrConnector from "./NostrConnector";
 
@@ -106,6 +108,11 @@ class RpcConnector implements IPoolConnector {
                 };
             }
         }
+    }
+
+    requestPayment(request: RpcRequestPayment, context: ServerCallContext): Promise<RpcRequestPaymentResponse> {
+        throw new Error("Method not implemented.");
+        // TODO: implement
     }
 
     async sendJobRequest(request: RpcJobRequest, context: ServerCallContext): Promise<Job> {

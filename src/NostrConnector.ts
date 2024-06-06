@@ -14,7 +14,7 @@ import {
     nip04,
     Relay
 } from "nostr-tools";
-import { Bid, PaymentStatus } from "openagents-grpc-proto";
+import { Payment, PaymentStatus } from "openagents-grpc-proto";
 // import Kinds from 'nostr-tools/lib/types/kinds';
 
 import Utils from './Utils';
@@ -572,7 +572,7 @@ export default class NostrConnector {
         descriptionFilter: RegExp,
         customerFilter: RegExp,
         kindFilter: RegExp,
-        bidFilter: Bid[],
+        bidFilter: Payment[],
         isAvailable: boolean,
         excludeIds?: string[]
     ): Promise<Array<Job>> {
@@ -593,7 +593,7 @@ export default class NostrConnector {
             ) {
                 if (bidFilter){
                     if(!job.bid)continue;
-                    const validBidFilters = bidFilter.find((bidFilter:Bid) => {
+                    const validBidFilters = bidFilter.find((bidFilter:Payment) => {
                         if (bidFilter.amount > job.bid.amount) return false;
                         if (bidFilter.currency != job.bid.currency) return false;
                         if (bidFilter.protocol != job.bid.protocol) return false;
