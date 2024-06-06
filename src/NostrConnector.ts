@@ -594,6 +594,7 @@ export default class NostrConnector {
                 if (bidFilter){
                     if(!job.bid)continue;
                     const validBidFilters = bidFilter.find((bidFilter:Payment) => {
+                        if (bidFilter.amount==0) return true;
                         if (bidFilter.amount > job.bid.amount) return false;
                         if (bidFilter.currency != job.bid.currency) return false;
                         if (bidFilter.protocol != job.bid.protocol) return false;
