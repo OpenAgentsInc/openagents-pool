@@ -128,6 +128,12 @@ export default class Job implements _Job {
             this.userId = userId;
         }
 
+        this.bid={
+            amount: 0,
+            currency: "bitcoin",
+            protocol: "lightning",
+        };
+
         if (minWorkers) this.minWorkers = minWorkers;
     }
 
