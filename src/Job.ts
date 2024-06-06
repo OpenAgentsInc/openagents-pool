@@ -33,20 +33,6 @@ export default class Job implements _Job {
     public description: string = "";
     public provider: string = "";
     public relays: string[] = [];
-    // public result: JobResult = {
-    //     id: "",
-    //     content: "",
-    //     timestamp: 0,
-    // };
-    // public state: JobState = {
-    //     logs: [],
-    //     status: JobStatus.UNKNOWN,
-    //     acceptedAt: 0,
-    //     acceptedBy: "",
-    //     timestamp: 0,
-    //     result: { id: "", content: "", timestamp: 0 },
-    //     acceptedByNode: "",
-    // };
     public results: JobState[] = [];
     private maxEventDuration: number;
     public maxExecutionTime: number;
@@ -55,7 +41,7 @@ export default class Job implements _Job {
     public encrypted: boolean = false;
     public userId: string = "";
     private minWorkers: number;
-    public bid: Payment;
+    public bid?: Payment;
 
     toJSON() {
         return {

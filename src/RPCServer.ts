@@ -110,7 +110,10 @@ class RpcConnector implements IPoolConnector {
         }
     }
 
-    requestPayment(request: RpcRequestPayment, context: ServerCallContext): Promise<RpcRequestPaymentResponse> {
+    requestPayment(
+        request: RpcRequestPayment,
+        context: ServerCallContext
+    ): Promise<RpcRequestPaymentResponse> {
         throw new Error("Method not implemented.");
         // TODO: implement
     }
@@ -477,14 +480,13 @@ class RpcConnector implements IPoolConnector {
     async getJob(request: RpcGetJob, context: ServerCallContext): Promise<Job> {
         try {
             const nodeId = await this.getNodeId(context);
-            const nwc= await this.getNWCData(context);
+            const nwc = await this.getNWCData(context);
             const id = request.jobId;
-            let job:Job|undefined = undefined;
+            let job: Job | undefined = undefined;
             const nResults = request.nResultsToWait || 1;
-            
-            
-            const pay=async (job:Job)=>{
-                if(!job)return;
+
+            const pay = async (job: Job) => {
+                if (!job) return;
                 const streamPayment = request.streamPayment;
                 const streamPaymentCurrency = request.streamPaymentCurrency || "bitcoin";
                 const streamPaymentProtocol = request.streamPaymentProtocol || "lightning";
@@ -513,7 +515,6 @@ class RpcConnector implements IPoolConnector {
                                 } else if (state.status == JobStatus.ERROR) {
                                     errors++;
                                 }
-                                
                             }
                             await pay(job);
                             const isDone = results >= nResults;
@@ -528,7 +529,7 @@ class RpcConnector implements IPoolConnector {
                 );
             }
             if (!job) job = await this.conn.getJob(nodeId, id);
-            
+
             await pay(job);
 
             return job;
@@ -539,11 +540,22 @@ class RpcConnector implements IPoolConnector {
     }
 
     async isJobDone(request: RpcGetJob, context: ServerCallContext): Promise<RpcIsJobDone> {
-        try {        
+        try {
+            const nResults = request.nResultsToWait || 1;
+            request.wait = 0;
             const job = await this.getJob(request, context);
-            const isDone = !!(job && job.state.status == JobStatus.SUCCESS && job.result.timestamp);            
+            let results = 0;
+            let errors = 0;
+            for (const state of job.results) {
+                if (state.status == JobStatus.SUCCESS && state.result.timestamp) {
+                    results++;
+                } else if (state.status == JobStatus.ERROR) {
+                    errors++;
+                }
+            }
+            const isDone = results >= nResults;
             return {
-                isDone
+                isDone,
             };
         } catch (e) {
             this.logger.error(e);
@@ -561,7 +573,6 @@ class RpcConnector implements IPoolConnector {
             const kindFilter: RegExp = new RegExp(request.filterByKind || ".*");
             const excludeIds: string[] = request.excludeId || [];
             const bidFilter = request.filterByBids || [];
-
 
             const findJobs = async () => {
                 return await this.conn.findJobs(
@@ -908,7 +919,7 @@ export default class RPCServer {
                         this.logger.error(`Server error: ${err.message}`);
                     } else {
                         resolve(true);
-                        this.logger.log(`Server bound on port: ${port}`);
+                        this.logger.info(`Server bound on port: ${port}`);
                     }
                 }
             );
