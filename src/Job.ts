@@ -168,7 +168,7 @@ export default class Job implements _Job {
             const expectedOutputFormat: string =
                 Utils.getTagVars(event, ["output"])[0][0] || "application/json";
 
-            const bidData = Utils.getTagVars(event, ["bid"])[0];
+            const bidData = Utils.getTagVars(event, ["bid"])[0]||[];
 
             const description: string =
                 Utils.getTagVars(event, ["about"])[0][0] ||
@@ -236,16 +236,15 @@ export default class Job implements _Job {
             }
 
             // calculate bid for each worker
-            if (bidData) {
-                const bid = bidData[0];
-                const bidCurrency = bidData[1] || Utils.getTagVars(event, ["t"])[0][0] || "bitcoin";
-                const bidProto = bidData[2] || "lightning";
-                this.bid = {
-                    amount: Number(bid) / minWorkers,
-                    currency: bidCurrency,
-                    protocol: bidProto,
-                };
-            }
+            const bid = bidData[0] || 0;
+            const bidCurrency = bidData[1] || Utils.getTagVars(event, ["t"])[0][0] || "bitcoin";
+            const bidProto = bidData[2] || "lightning";
+            this.bid = {
+                amount: Number(bid) / minWorkers,
+                currency: bidCurrency,
+                protocol: bidProto,
+            };
+        
         } else if (event.kind == 7000 || (event.kind >= 6000 && event.kind <= 6999)) {
             const e: Array<string> = Utils.getTagVars(event, ["e"])[0];
             const jobId: string = e[0];
