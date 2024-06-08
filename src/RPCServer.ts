@@ -73,6 +73,8 @@ import {
     RpcPayJobRequest,
     RpcRequestPayment,
     RpcRequestPaymentResponse,
+    RpcWaitForPaymentsRequest,
+    RpcWaitForPaymentsResponse,
 } from "openagents-grpc-proto";
 import NostrConnector from "./NostrConnector";
 
@@ -110,12 +112,50 @@ class RpcConnector implements IPoolConnector {
         }
     }
 
-    requestPayment(
+    async requestPayment(
         request: RpcRequestPayment,
         context: ServerCallContext
     ): Promise<RpcRequestPaymentResponse> {
-        throw new Error("Method not implemented.");
-        // TODO: implement
+        const nodeId = await this.getNodeId(context);
+        const nwc = await this.getNWCData(context);
+        this.conn.requestPayment(
+            nodeId,
+            nwc,
+            request.jobId,
+            request.payment
+                ? request.payment
+                : {
+                      amount: 0,
+                      currency: "bitcoin",
+                      protocol: "lightning",
+                  }
+        );
+        return {
+            status: true,
+        };
+    }
+
+    async waitForPayments(
+        request: RpcWaitForPaymentsRequest,
+        context: ServerCallContext
+    ): Promise<RpcWaitForPaymentsResponse> {
+        const id = request.jobId;
+        const nodeId = await this.getNodeId(context);
+        const out = await Utils.busyWaitForSomething(
+            async () => {
+                try {
+                    return this.conn.isJobWaitingForPayment(nodeId, id);
+                } catch (e) {}
+                return undefined;
+            },
+            () => {
+                return false; // return last fetched job
+            },
+            request.wait
+        );
+        return {
+            status: out,
+        };
     }
 
     async sendJobRequest(request: RpcJobRequest, context: ServerCallContext): Promise<Job> {
@@ -471,7 +511,9 @@ class RpcConnector implements IPoolConnector {
     async getNodeId(context: ServerCallContext): Promise<string> {
         return (await context.headers["nodeid"]) as string;
     }
-
+    async getUserId(context: ServerCallContext): Promise<string> {
+        return (await context.headers["userid"]) as string;
+    }
     async getCache(context: ServerCallContext): Promise<CacheDisk> {
         const cacheId = context.headers["cacheid"] as string;
         return this.cache.get(cacheId);
@@ -684,6 +726,7 @@ class RpcConnector implements IPoolConnector {
     async requestJob(request: RpcRequestJob, context: ServerCallContext): Promise<Job> {
         try {
             const nodeId = await this.getNodeId(context);
+            const userId = await this.getUserId(context);
             return this.conn.requestJob(
                 nodeId,
                 request.runOn,
@@ -695,7 +738,7 @@ class RpcConnector implements IPoolConnector {
                 request.outputFormat,
                 request.requestProvider,
                 request.encrypted,
-                request.userId,
+                userId,
                 request.minWorkers
             );
         } catch (e) {

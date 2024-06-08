@@ -128,7 +128,7 @@ export default class Job implements _Job {
             this.userId = userId;
         }
 
-        this.bid={
+        this.bid = {
             amount: 0,
             currency: "bitcoin",
             protocol: "lightning",
@@ -168,7 +168,7 @@ export default class Job implements _Job {
             const expectedOutputFormat: string =
                 Utils.getTagVars(event, ["output"])[0][0] || "application/json";
 
-            const bidData = Utils.getTagVars(event, ["bid"])[0]||[];
+            const bidData = Utils.getTagVars(event, ["bid"])[0] || [];
 
             const description: string =
                 Utils.getTagVars(event, ["about"])[0][0] ||
@@ -236,15 +236,14 @@ export default class Job implements _Job {
             }
 
             // calculate bid for each worker
-            const bid = bidData[0] || 0;
+            const bid = Number(bidData[0] || 0);
             const bidCurrency = bidData[1] || Utils.getTagVars(event, ["t"])[0][0] || "bitcoin";
             const bidProto = bidData[2] || "lightning";
             this.bid = {
-                amount: Number(bid) / minWorkers,
+                amount: bid / minWorkers,
                 currency: bidCurrency,
                 protocol: bidProto,
             };
-        
         } else if (event.kind == 7000 || (event.kind >= 6000 && event.kind <= 6999)) {
             const e: Array<string> = Utils.getTagVars(event, ["e"])[0];
             const jobId: string = e[0];
@@ -277,8 +276,8 @@ export default class Job implements _Job {
 
             const timestamp = Number(event.created_at) * 1000;
             const nodeId = Utils.getTagVars(event, ["d"])[0][0] || "";
-            const [
-                paymentRequestAmount,
+            let [
+                paymentRequestAmountStr,
                 paymentRequestInvoice,
                 paymentRequestCurrency,
                 paymentRequestProtocol,
@@ -303,12 +302,14 @@ export default class Job implements _Job {
                 this.results.push(state);
             }
 
+            const paymentRequestAmount = Number(paymentRequestAmountStr || "0");
+
             if (paymentRequestAmount && !state.paymentRequests.find((p) => p.id == paymentRequestInvoice)) {
                 const totalRequested = state.paymentRequests.reduce((acc, p) => acc + p.amount, 0);
-                if (totalRequested + Number(paymentRequestAmount) <= this.bid.amount) {
+                if (totalRequested + paymentRequestAmount <= this.bid.amount) {
                     state.paymentRequests.push({
                         id: paymentRequestInvoice,
-                        amount: Number(paymentRequestAmount),
+                        amount: paymentRequestAmount,
                         currency: paymentRequestCurrency,
                         protocol: paymentRequestProtocol,
                         data: paymentRequestInvoice,
@@ -327,6 +328,16 @@ export default class Job implements _Job {
             if (event.kind == 7000) {
                 // TODO: content?
                 let [status, info] = Utils.getTagVars(event, ["status"])[0];
+
+                if (status == "payment-required"){
+                    for(const state of this.results){
+                        if(state.acceptedByNode == nodeId && state.acceptedBy == provider){
+                            for(const pay of state.paymentRequests){
+                                pay.waitForPayment = true;
+                            }
+                        }
+                    }
+                }
 
                 if (!info && status == "log") info = content;
 
@@ -653,10 +664,27 @@ export default class Job implements _Job {
                 ["d", nodeId],
                 ["userid", this.userId],
                 this.encrypted ? ["encrypted", "true"] : undefined,
-                ...paymentTags,
             ].filter((t) => t),
         };
         events.push(feedbackEvent);
+
+
+        const paymentRequestEvent: EventTemplate = {
+            kind: 7000,
+            content: info || "",
+            created_at: Math.floor(Date.now() / 1000),
+            tags: [
+                ["status", "request-payment"],
+                ["e", this.id],
+                ["p", this.customerPublicKey],
+                ["expiration", "" + Math.floor(this.expiration / 1000)],
+                ["d", nodeId],
+                ["userid", this.userId],
+                this.encrypted ? ["encrypted", "true"] : undefined,
+                ...paymentTags,
+            ].filter((t) => t),
+        };
+        events.push(paymentRequestEvent);
 
         // request payment
         // if(this.bid){
@@ -681,6 +709,46 @@ export default class Job implements _Job {
     // getBid(){
     // return this.bid;
     // }
+    async requestPayment(
+        nodeId: string,
+        pk: string,
+        payment: Payment,
+        invoicer: (amount: number, currency: string, protocol: string) => Promise<string>,
+        log: string = "payment request"
+    ): Promise<Array<EventTemplate>> {
+        const t = Date.now();
+
+        let totalPaymentRequested = 0;
+        const state = this.results.find((s) => {
+            return s.acceptedByNode == nodeId && s.acceptedBy == pk;
+        });
+        if (state) {
+            totalPaymentRequested = state.paymentRequests.reduce((acc, p) => acc + p.amount, 0);
+        }
+
+        const amount = Math.min(this.bid.amount - totalPaymentRequested, payment.amount);
+        const currency = payment.currency;
+        const protocol = payment.protocol;
+        const invoice = await invoicer(amount, currency, protocol);
+
+        const feedbackEvent: EventTemplate = {
+            kind: 7000,
+            content: log,
+            created_at: Math.floor(t / 1000),
+            tags: [
+                ["status", "payment-required", log],
+                ["e", this.id],
+                ["p", this.customerPublicKey],
+                ["expiration", "" + Math.floor(this.expiration / 1000)],
+                ["d", nodeId],
+                ["userid", this.userId],
+                ["amount", "" + amount, invoice, currency, protocol],
+                this.encrypted ? ["encrypted", "true"] : undefined,
+            ].filter((t) => t),
+        };
+
+        return [feedbackEvent];
+    }
 
     async log(nodeId: string, pk: string, log: string): Promise<Array<EventTemplate>> {
         const t = Date.now();
@@ -701,6 +769,7 @@ export default class Job implements _Job {
 
         return [feedbackEvent];
     }
+    
 
     async resolveInputs(resolver: (ref: string, type: string) => Promise<string | undefined>): Promise<void> {
         for (const input of this.input) {
@@ -761,5 +830,17 @@ export default class Job implements _Job {
         };
         // this.id = eventRequest.id;
         return [eventRequest];
+    }
+
+
+    isWaitingForPayment(nodeId?: string, pk?: string){
+        for(const state of this.results){
+            if(nodeId && state.acceptedByNode != nodeId ) continue;
+            if(pk && state.acceptedBy != pk ) continue;
+            for(const payment of state.paymentRequests){
+                if (payment.status != PaymentStatus.PAYMENT_RECEIVED && payment.waitForPayment) return true;
+            }
+        }
+        return false;
     }
 }

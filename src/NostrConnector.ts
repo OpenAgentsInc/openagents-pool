@@ -591,17 +591,17 @@ export default class NostrConnector {
                 customerFilter.test(job.customerPublicKey) &&
                 kindFilter.test(job.kind.toString())
             ) {
-                if (bidFilter){
-                    if(!job.bid)continue;
-                    const validBidFilters = bidFilter.find((bidFilter:Payment) => {
-                        if (bidFilter.amount==0) return true;
+                if (bidFilter) {
+                    if (!job.bid) continue;
+                    const validBidFilters = bidFilter.find((bidFilter: Payment) => {
+                        if (bidFilter.amount == 0) return true;
                         if (bidFilter.amount > job.bid.amount) return false;
                         if (bidFilter.currency != job.bid.currency) return false;
                         if (bidFilter.protocol != job.bid.protocol) return false;
                         return true;
                     });
-                    if(!validBidFilters)continue;
-                }                    
+                    if (!validBidFilters) continue;
+                }
                 jobs.push(job);
             }
         }
@@ -682,7 +682,7 @@ export default class NostrConnector {
         limit: number,
         currency: string,
         protocol: string
-    ) :Promise<Job>{
+    ): Promise<Job> {
         const job = await this.getJob(nodeId, id);
         if (!job) {
             throw new Error("Job not found " + id);
@@ -691,7 +691,7 @@ export default class NostrConnector {
             throw new Error("Job not assigned");
         }
         const payer = async (
-            invoice:string,
+            invoice: string,
             amount: number,
             currency: string,
             protocol: string
@@ -699,20 +699,22 @@ export default class NostrConnector {
             return await this.payInvoice(nwcData, invoice);
         };
 
-        const outEvents=[];
+        const outEvents = [];
         let totalPaid = 0;
-        for(const result of job.results){
-            for(const req of result.paymentRequests){
-                if (req.status!=PaymentStatus.PAYMENT_PENDING)continue;
+        for (const result of job.results) {
+            for (const req of result.paymentRequests) {
+                if (req.status != PaymentStatus.PAYMENT_PENDING) continue;
                 if (totalPaid + req.amount > limit) {
                     throw new Error("Limit reached");
                 }
-                outEvents.push(await job.pay(nodeId,  req.amount, req.data,req.currency, req.protocol, payer));
+                outEvents.push(
+                    await job.pay(nodeId, req.amount, req.data, req.currency, req.protocol, payer)
+                );
                 req.status = PaymentStatus.PAYMENT_SENT;
                 totalPaid += req.amount;
             }
         }
-        await Promise.all(outEvents.map(e=>this.sendEvent(e)));
+        await Promise.all(outEvents.map((e) => this.sendEvent(e)));
         return job;
     }
 
@@ -741,6 +743,44 @@ export default class NostrConnector {
         const eventQueue: EventTemplate[] = await job.complete(nodeId, this.pk, result, undefined, invoicer);
         await Promise.all(eventQueue.map((event) => this.sendEvent(event)));
         this.closeAllCustomSubscriptions(id);
+        return job;
+    }
+
+    async isJobWaitingForPayment(nodeId: string, jobId: string): Promise<boolean> {
+        const job = await this.getJob(nodeId, jobId);
+        if (!job) {
+            throw new Error("Job not found " + jobId);
+        }
+        if (job.isAvailable(nodeId)) {
+            throw new Error("Job not assigned");
+        }
+        return job.isWaitingForPayment(nodeId, this.pk);
+    }
+
+    async requestPayment(
+        nodeId: string,
+        nwcData: { pubkey: string; relay: string; secret: string } | undefined,
+        jobId: string,
+        payment: Payment
+    ) {
+        const job = await this.getJob(nodeId, jobId);
+        if (!job) {
+            throw new Error("Job not found " + jobId);
+        }
+        if (job.isAvailable(nodeId)) {
+            throw new Error("Job not assigned");
+        }
+
+        let invoicer: (amount: number, currency: string, protocol: string) => Promise<string> | undefined =
+            undefined;
+        if (nwcData) {
+            invoicer = async (amount: number, currency: string, protocol: string) => {
+                return await this.makeInvoice(nwcData, amount, "", 0);
+            };
+        }
+
+        const eventQueue: EventTemplate[] = await job.requestPayment(nodeId, this.pk, payment, invoicer);
+        await Promise.all(eventQueue.map((event) => this.sendEvent(event)));
         return job;
     }
 
@@ -1074,9 +1114,9 @@ export default class NostrConnector {
                     )
                         continue;
                     const actionClone = JSON.parse(JSON.stringify(action));
-                    if (!actionClone.meta.id){
+                    if (!actionClone.meta.id) {
                         let actionId = JSON.stringify([action.template, action.sockets, action.meta]);
-                        actionId = Utils.uuidFrom(actionId);                        
+                        actionId = Utils.uuidFrom(actionId);
                         actionClone.meta.id = actionId;
                     }
                     actions.set(actionClone.meta.id, actionClone);
@@ -1099,7 +1139,6 @@ export default class NostrConnector {
         nwcData: { pubkey: string; relay: string; secret: string },
         invoice: string
     ): Promise<string> {
-
         const relay = await Relay.connect(nwcData.relay);
 
         const content = {
@@ -1113,7 +1152,6 @@ export default class NostrConnector {
         };
         const encryptedContent = await nip04.encrypt(nwcData.secret, nwcData.pubkey, JSON.stringify(content));
 
-       
         const eventTemplate: EventTemplate = {
             kind: 23194,
             content: encryptedContent,
@@ -1142,7 +1180,7 @@ export default class NostrConnector {
                                 nwcData.pubkey,
                                 encryptedContent
                             );
-                    
+
                             const contentData = JSON.parse(decryptedContent);
                             let preimage = contentData.result.preimage || "";
                             sub.close();
@@ -1164,10 +1202,9 @@ export default class NostrConnector {
         });
 
         await relay.publish(event);
-        const out= (await preimage) as string;
+        const out = (await preimage) as string;
         relay.close();
         return out;
-
     }
 
     async makeInvoice(
@@ -1177,7 +1214,6 @@ export default class NostrConnector {
         expiration: number
     ): Promise<string> {
         const relay = await Relay.connect(nwcData.relay);
-
 
         const content = {
             method: "make_invoice",
@@ -1196,7 +1232,7 @@ export default class NostrConnector {
             created_at: Math.round(Date.now() / 1000),
             tags: [["p", nwcData.pubkey]],
         };
-       
+
         const event = finalizeEvent(eventTemplate, hexToBytes(nwcData.secret));
         const nwcUser = getPublicKey(hexToBytes(nwcData.secret));
         const invoice = new Promise((res, rej) => {
@@ -1240,7 +1276,7 @@ export default class NostrConnector {
         });
 
         await relay.publish(event);
-    
+
         const out = (await invoice) as string;
         relay.close();
         return out;

@@ -67,6 +67,10 @@ export default class Auth {
                         call.metadata.set("nodeid", conn.publicToken);
                         call.metadata.set("cacheid", conn.publicToken);
 
+                        const userPriv: string = bytesToHex(Utils.generateSecretKey(metadata["userid"] || bytesToHex(generateSecretKey())));
+                        const userPub: string = getPublicKey(hexToBytes(userPriv));
+                        call.metadata.set("userid", userPub);
+
                         if (await this.isNodeAuthorized(methodName, conn.publicToken)) {
                             methodImplementation(call, callback);
                         } else {
