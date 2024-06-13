@@ -136,6 +136,18 @@ export default class Node  {
             this.updateNeeded = true;
         } else {
             existingReg.timestamp = Date.now();
+            if(existingReg.template!==template){
+                existingReg.template = template;
+                this.updateNeeded = true;
+            }
+            if(JSON.stringify(existingReg.sockets)!==JSON.stringify(JSON.parse(sockets))){
+                existingReg.sockets = JSON.parse(sockets);
+                this.updateNeeded = true;
+            }
+            if(JSON.stringify(existingReg.meta)!==JSON.stringify(JSON.parse(meta))){
+                existingReg.meta = JSON.parse(meta);
+                this.updateNeeded = true;
+            }            
         }
         return this.announcementTimeout;
     }
